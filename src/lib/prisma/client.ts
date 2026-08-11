@@ -10,7 +10,6 @@ function getDatabaseUrl(): string {
   const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
 
   if (process.env.VERCEL === '1' && rawUrl.startsWith('file:')) {
-    // Vercel serverless environment: use writable /tmp directory
     return 'file:/tmp/dev.db';
   }
 
@@ -40,27 +39,29 @@ export async function ensureDatabaseTables(): Promise<void> {
   if (dbInitialized) return;
   try {
     await prisma.brand.count();
+    await prisma.competitor.count();
+    await prisma.run.count();
     dbInitialized = true;
   } catch {
-    console.log('[Prisma] Database tables missing, initializing schema...');
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Brand" (
+    console.log('[Prisma] Initializing database tables individually...');
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS "Brand" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "name" TEXT NOT NULL,
         "domain" TEXT,
         "description" TEXT,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS "Competitor" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "Competitor" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "name" TEXT NOT NULL,
         "domain" TEXT,
         "brandId" TEXT NOT NULL,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS "AIEngine" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "AIEngine" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "name" TEXT NOT NULL UNIQUE,
         "provider" TEXT NOT NULL,
@@ -69,16 +70,16 @@ export async function ensureDatabaseTables(): Promise<void> {
         "enabled" BOOLEAN NOT NULL DEFAULT 1,
         "color" TEXT,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS "Prompt" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "Prompt" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "text" TEXT NOT NULL,
         "category" TEXT,
         "brandId" TEXT NOT NULL,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS "Run" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "Run" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "brandId" TEXT NOT NULL,
         "status" TEXT NOT NULL DEFAULT 'QUEUED',
@@ -94,8 +95,8 @@ export async function ensureDatabaseTables(): Promise<void> {
         "error" TEXT,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS "RunResult" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "RunResult" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "runId" TEXT NOT NULL,
         "promptId" TEXT NOT NULL,
@@ -115,8 +116,8 @@ export async function ensureDatabaseTables(): Promise<void> {
         FOREIGN KEY ("runId") REFERENCES "Run" ("id") ON DELETE CASCADE,
         FOREIGN KEY ("promptId") REFERENCES "Prompt" ("id") ON DELETE CASCADE,
         FOREIGN KEY ("engineId") REFERENCES "AIEngine" ("id") ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS "VisibilityMetric" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "VisibilityMetric" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "brandId" TEXT NOT NULL,
         "runId" TEXT,
@@ -131,8 +132,8 @@ export async function ensureDatabaseTables(): Promise<void> {
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE CASCADE,
         FOREIGN KEY ("runId") REFERENCES "Run" ("id") ON DELETE SET NULL
-      );
-      CREATE TABLE IF NOT EXISTS "Insight" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "Insight" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "runId" TEXT NOT NULL,
         "promptId" TEXT,
@@ -158,8 +159,8 @@ export async function ensureDatabaseTables(): Promise<void> {
         FOREIGN KEY ("runId") REFERENCES "Run" ("id") ON DELETE CASCADE,
         FOREIGN KEY ("promptId") REFERENCES "Prompt" ("id") ON DELETE SET NULL,
         FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS "Brief" (
+      );`,
+      `CREATE TABLE IF NOT EXISTS "Brief" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "insightId" TEXT NOT NULL UNIQUE,
         "title" TEXT NOT NULL,
@@ -181,9 +182,13 @@ export async function ensureDatabaseTables(): Promise<void> {
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY ("insightId") REFERENCES "Insight" ("id") ON DELETE CASCADE
-      );
-    `);
+      );`,
+    ];
+
+    for (const stmt of statements) {
+      await prisma.$executeRawUnsafe(stmt);
+    }
     dbInitialized = true;
-    console.log('[Prisma] Database tables initialized successfully.');
+    console.log('[Prisma] All 9 database tables created individually.');
   }
 }
