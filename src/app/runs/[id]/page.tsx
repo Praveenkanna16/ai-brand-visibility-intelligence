@@ -5,12 +5,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
-import StickyNote from '@/components/ui/StickyNote';
 import {
   CheckCircle2,
   Loader2,
   Circle,
-  Lightbulb,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -23,11 +21,11 @@ import {
   Layers,
   ShieldAlert,
 } from 'lucide-react';
-import { progressStep, fadeInUp, buttonHover, buttonTap, cardStagger, cardEntrance } from '@/lib/animations/variants';
+import { progressStep, fadeInUp, cardStagger, cardEntrance } from '@/lib/animations/variants';
 
 export default function RunProgressPage() {
   const params = useParams();
-  const id = (params?.id as string) || 'run-demo-001';
+  const id = params?.id as string;
 
   const [progress, setProgress] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
@@ -42,21 +40,27 @@ export default function RunProgressPage() {
     }));
   };
 
-  // Poll progress while status is QUEUED or RUNNING
   useEffect(() => {
+    if (!id) return;
+
     let interval: NodeJS.Timeout;
 
     async function fetchProgress() {
       try {
         const res = await fetch(`/api/runs/${id}/progress`);
         if (!res.ok) {
+          if (res.status === 404) {
+            setError('Run not found. It may have been deleted or the ID is invalid.');
+            setIsLoading(false);
+            return;
+          }
           throw new Error('Failed to fetch run progress');
         }
         const data = await res.json();
         setProgress(data);
         setIsLoading(false);
 
-        if (data.status === 'COMPLETED') {
+        if (data.status === 'COMPLETED' || data.status === 'PARTIAL') {
           fetchReport();
         } else if (data.status === 'FAILED') {
           setError(data.error || 'Live analysis failed');
@@ -69,24 +73,11 @@ export default function RunProgressPage() {
 
     async function fetchReport() {
       try {
-        const cached = typeof window !== 'undefined' ? localStorage.getItem(`citescope_run_${id}`) : null;
-        if (cached) {
-          try {
-            setReport(JSON.parse(cached));
-          } catch {
-            // ignore JSON parse error
-          }
-        }
         const res = await fetch(`/api/runs/${id}`);
         if (res.ok) {
           const data = await res.json();
           if (data && !data.error) {
             setReport(data);
-            try {
-              localStorage.setItem(`citescope_run_${id}`, JSON.stringify(data));
-            } catch {
-              // ignore
-            }
           }
         }
       } catch (err) {
@@ -99,7 +90,7 @@ export default function RunProgressPage() {
     interval = setInterval(() => {
       if (!report && (!progress || progress.status === 'QUEUED' || progress.status === 'RUNNING')) {
         fetchProgress();
-      } else if (progress?.status === 'COMPLETED' && !report) {
+      } else if ((progress?.status === 'COMPLETED' || progress?.status === 'PARTIAL') && !report) {
         fetchReport();
       }
     }, 2000);
@@ -107,7 +98,7 @@ export default function RunProgressPage() {
     return () => clearInterval(interval);
   }, [id, progress?.status, report]);
 
-  const isCompleted = progress?.status === 'COMPLETED';
+  const isCompleted = progress?.status === 'COMPLETED' || progress?.status === 'PARTIAL';
   const isFailed = progress?.status === 'FAILED';
   const pctComplete = progress?.pctComplete ?? (isCompleted ? 100 : 0);
 
@@ -115,8 +106,33 @@ export default function RunProgressPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
         <Loader2 size={36} className="animate-spin text-emerald-700 mb-4" />
-        <p className="text-body-lg text-emerald-900 font-medium">Loading analysis state...</p>
+        <p className="text-body-lg text-emerald-900 font-medium">Loading analysis state from database...</p>
       </div>
+    );
+  }
+
+  if (error && !progress) {
+    return (
+      <PageTransition>
+        <div className="max-w-4xl mx-auto px-page py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-100 text-red-800 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle size={32} />
+          </div>
+          <h1 className="text-display-md mb-4 text-slate-900 font-display">
+            Analysis Run Error
+          </h1>
+          <p className="text-body-lg text-slate-600 max-w-xl mx-auto mb-8">
+            {error}
+          </p>
+          <Link
+            href="/runs/new"
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
+          >
+            <Zap size={16} className="text-yellow-300 fill-yellow-300" />
+            Start New Live Analysis
+          </Link>
+        </div>
+      </PageTransition>
     );
   }
 
@@ -135,7 +151,7 @@ export default function RunProgressPage() {
               }}
             >
               <Zap size={14} className={isCompleted ? '' : 'animate-pulse'} />
-              {isCompleted ? 'LIVE ANALYSIS REPORT' : 'LIVE GEMINI ANALYSIS IN PROGRESS'}
+              {isCompleted ? 'LIVE GEMINI ANALYSIS REPORT' : 'LIVE GEMINI ANALYSIS IN PROGRESS'}
             </span>
           </div>
 
@@ -169,7 +185,7 @@ export default function RunProgressPage() {
           <div className="mb-12 p-6 rounded-2xl border border-red-200 bg-red-50 text-red-900">
             <div className="flex items-center gap-3 mb-2 font-semibold text-lg">
               <AlertTriangle className="text-red-600" />
-              Live Analysis Notice
+              Live Analysis Failed
             </div>
             <p className="text-sm">{error || 'An error occurred during Gemini API query execution.'}</p>
             <div className="mt-4">
@@ -230,7 +246,7 @@ export default function RunProgressPage() {
               <motion.div variants={cardEntrance} className="bento-card p-8">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-headline-sm" style={{ color: 'var(--primary)' }}>
-                    Live Progress
+                    Live DB Progress
                   </h2>
                   <span className="text-label-caps" style={{ color: 'var(--secondary)' }}>
                     {progress?.progressCurrent || 0} / {progress?.progressTotal || 0} tasks
@@ -433,7 +449,7 @@ export default function RunProgressPage() {
                       </div>
                     )}
 
-                    {/* Raw AI Response Inspector (Rule #8) */}
+                    {/* Raw AI Response Inspector */}
                     <div className="pt-2">
                       <button
                         type="button"
@@ -446,7 +462,7 @@ export default function RunProgressPage() {
 
                       {expandedResponses[r.id || String(idx)] && (
                         <div className="mt-3 p-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap">
-                          {r.rawResponse || 'No raw response available.'}
+                          {r.rawResponse || 'No raw response recorded.'}
                         </div>
                       )}
                     </div>
@@ -455,15 +471,12 @@ export default function RunProgressPage() {
               </div>
             </div>
 
-            {/* Methodology & AI Disclaimer (Rule #50 & #51) */}
+            {/* Methodology & AI Disclaimer */}
             <div className="p-6 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-2">
               <p className="font-semibold text-sm">Methodology & AI Limitations Disclaimer</p>
               <p>
-                This report is based on the selected prompts and the live AI engine responses collected during this analysis run.
-                Visibility scores reflect only this sampled set of queries and should not be treated as a universal measure of AI model behavior.
-              </p>
-              <p>
-                AI answer engines are dynamic and responses can vary over time. CiteScope measurements serve as empirical audit snapshots for strategic marketing guidance.
+                This report is based on the selected prompts and live Gemini AI responses collected during this analysis run.
+                Visibility scores reflect only this sampled set of queries.
               </p>
             </div>
 

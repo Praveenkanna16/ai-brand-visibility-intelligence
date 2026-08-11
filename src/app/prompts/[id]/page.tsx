@@ -1,15 +1,90 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 import StickyNote from '@/components/ui/StickyNote';
-import { demoRunResults } from '@/lib/demo/data';
-import { ArrowLeft, AlertCircle, Sparkles, FileText, CheckCircle2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Sparkles, FileText, CheckCircle2, ChevronRight, Loader2, Zap } from 'lucide-react';
 import { fadeInUp, cardStagger, cardEntrance } from '@/lib/animations/variants';
 
-export default function PromptInvestigationPage({ params }: { params: { id: string } }) {
-  const result = demoRunResults.find((r) => r.id === params.id) || demoRunResults[0];
+export default function PromptInvestigationPage() {
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [data, setData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    async function loadPromptDetails() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/prompts/${id}`);
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          setError('Prompt result not found.');
+        }
+      } catch (err) {
+        console.error('Error fetching prompt details:', err);
+        setError('Unable to connect to CiteScope server.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadPromptDetails();
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
+        <Loader2 size={36} className="animate-spin text-emerald-700 mb-4" />
+        <p className="text-body-md text-emerald-900 font-medium">Loading prompt analysis details...</p>
+      </div>
+    );
+  }
+
+  if (error || !data || !data.result) {
+    return (
+      <PageTransition>
+        <div className="max-w-4xl mx-auto px-page py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-100 text-red-800 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle size={32} />
+          </div>
+          <h1 className="text-display-md mb-4 text-slate-900 font-display">
+            Prompt Detail Not Found
+          </h1>
+          <p className="text-body-lg text-slate-600 max-w-xl mx-auto mb-8">
+            {error || 'The requested prompt execution details could not be found.'}
+          </p>
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/prompts"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold text-xs uppercase tracking-wider hover:bg-slate-100 transition-colors"
+            >
+              Back to Prompts Matrix
+            </Link>
+            <Link
+              href="/runs/new"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
+            >
+              <Zap size={16} className="text-yellow-300 fill-yellow-300" />
+              Run Live Analysis
+            </Link>
+          </div>
+        </div>
+      </PageTransition>
+    );
+  }
+
+  const result = data.result;
+  const promptText = data.prompt?.text || 'Category Prompt';
+  const brandName = data.brandName || 'Target Brand';
 
   return (
     <PageTransition>
@@ -36,18 +111,18 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
                 color: 'var(--secondary)',
               }}
             >
-              Engine: {result.engine?.displayName}
+              Engine: {result.engineName || 'Gemini'}
             </span>
             {result.mentioned ? (
               <span
-                className="px-3 py-1 rounded-full text-label-caps border"
+                className="px-3 py-1 rounded-full text-label-caps border flex items-center gap-1"
                 style={{
                   backgroundColor: 'rgba(192, 236, 217, 0.4)',
                   color: 'var(--on-primary-fixed-variant)',
                   borderColor: 'var(--primary-fixed)',
                 }}
               >
-                Mentioned #{result.position}
+                <CheckCircle2 size={14} /> Mentioned {result.position ? `#${result.position}` : ''}
               </span>
             ) : (
               <span
@@ -64,7 +139,7 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
           </div>
 
           <h1 className="text-display-lg" style={{ color: 'var(--primary)' }}>
-            "{result.prompt?.text}"
+            "{promptText}"
           </h1>
         </header>
 
@@ -80,17 +155,17 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
             <div className="bento-card p-8">
               <h2 className="text-headline-sm mb-4 flex items-center gap-2" style={{ color: 'var(--primary)' }}>
                 <Sparkles size={20} style={{ color: 'var(--tertiary-container)' }} />
-                Synthesized AI Response
+                Synthesized AI Response (Source text)
               </h2>
               <div
-                className="p-6 rounded-xl text-body-lg leading-relaxed font-body border space-y-4 whitespace-pre-line"
+                className="p-6 rounded-xl text-body-lg leading-relaxed font-mono text-xs border space-y-4 whitespace-pre-wrap max-h-96 overflow-y-auto"
                 style={{
                   backgroundColor: 'var(--surface-container-low)',
                   borderColor: 'var(--outline-variant)',
                   color: 'var(--on-surface)',
                 }}
               >
-                {result.rawResponse}
+                {result.rawResponse || 'No raw response recorded.'}
               </div>
             </div>
 
@@ -102,7 +177,7 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
                   Attribution & Synthesized Evidence
                 </h2>
                 <div className="space-y-4">
-                  {result.evidence.map((ev, i) => (
+                  {result.evidence.map((ev: any, i: number) => (
                     <div
                       key={i}
                       className="p-4 rounded-xl border"
@@ -115,7 +190,9 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
                         <span className="text-label-caps font-bold" style={{ color: 'var(--primary-container)' }}>
                           {ev.source}
                         </span>
-                        <span className="text-xs text-outline">Confidence: {result.confidence ? `${Math.round(result.confidence * 100)}%` : 'High'}</span>
+                        <span className="text-xs text-outline">
+                          Confidence: {result.confidence ? `${Math.round(result.confidence * 100)}%` : 'High'}
+                        </span>
                       </div>
                       <h4 className="text-body-md font-bold mb-1" style={{ color: 'var(--primary)' }}>
                         {ev.title}
@@ -135,21 +212,21 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
             <StickyNote
               color="mustard"
               rotation="none"
-              label="Analyst Brief"
+              label="Audit Brief"
               labelIcon={<Sparkles size={18} />}
             >
               <p className="text-body-md leading-relaxed mb-6" style={{ color: '#271900' }}>
                 {result.mentioned
-                  ? `Pixis received a position #${result.position} mention in this response. The sentiment is positive, emphasizing codeless AI infrastructure.`
-                  : `Target brand was not cited in this response. Primary citations went to Smartly.io and Madgicx.`}
+                  ? `${brandName} received a position #${result.position || 'listed'} mention in this response.`
+                  : `${brandName} was not cited in this response. Competitors detected: ${result.competitorsMentioned.join(', ') || 'None'}.`}
               </p>
               <div className="pt-4 border-t border-black/10">
                 <Link
-                  href="/insights/insight-001"
+                  href={`/runs/${result.runId}`}
                   className="inline-flex items-center gap-2 text-label-caps font-bold transition-transform hover:translate-x-1"
                   style={{ color: '#5e4200' }}
                 >
-                  View Gap Analysis <ChevronRight size={14} />
+                  View Full Run Report <ChevronRight size={14} />
                 </Link>
               </div>
             </StickyNote>
@@ -160,17 +237,17 @@ export default function PromptInvestigationPage({ params }: { params: { id: stri
                 Actionable Next Step
               </h3>
               <p className="text-body-md mb-6" style={{ color: 'var(--secondary)' }}>
-                Generate a targeted marketing content brief to address this visibility gap.
+                Review full visibility gaps and strategic recommendations for this run.
               </p>
               <Link
-                href="/insights/insight-001/brief"
+                href={`/runs/${result.runId}`}
                 className="w-full inline-flex justify-center items-center gap-2 px-6 py-3 rounded-full text-label-caps font-bold transition-opacity hover:opacity-90"
                 style={{
                   backgroundColor: 'var(--primary-container)',
                   color: 'var(--on-primary)',
                 }}
               >
-                Create Content Brief <ChevronRight size={16} />
+                View Full Analysis <ChevronRight size={16} />
               </Link>
             </div>
           </motion.div>

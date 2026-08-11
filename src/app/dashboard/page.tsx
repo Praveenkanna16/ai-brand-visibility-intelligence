@@ -5,48 +5,63 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 import StickyNote from '@/components/ui/StickyNote';
-import { demoDashboard } from '@/lib/demo/data';
-import { Lightbulb, TrendingUp, Filter, Zap, ArrowRight, Layers, BarChart3, AlertCircle } from 'lucide-react';
+import { Lightbulb, TrendingUp, Filter, Zap, ArrowRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { cardStagger, cardEntrance, metricEntrance } from '@/lib/animations/variants';
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadDashboardData() {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Get latest run to identify active brand
+      const runsRes = await fetch('/api/runs');
+      let targetBrandName = 'Latest';
+
+      if (runsRes.ok) {
+        const runs = await runsRes.json();
+        if (Array.isArray(runs) && runs.length > 0) {
+          targetBrandName = runs[0].brand?.name || 'Latest';
+        }
+      }
+
+      // 2. Fetch dashboard data for brand
+      const res = await fetch(`/api/dashboard/${encodeURIComponent(targetBrandName)}`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setError(errJson.error || 'Failed to load dashboard metrics');
+      }
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setError('Unable to connect to CiteScope metrics server.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadDashboardData() {
-      try {
-        const res = await fetch('/api/dashboard/Pixis');
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        } else {
-          setData(demoDashboard);
-        }
-      } catch (err) {
-        console.error('Error loading dashboard data:', err);
-        setData(demoDashboard);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     loadDashboardData();
   }, []);
 
-  const d = data || demoDashboard;
-  const isDemo = Boolean(d.isDemo || d.isDemoMode);
-  const isEmpty = Boolean(d.emptyState);
+  const d = data;
+  const isEmpty = Boolean(!d || d.emptyState);
 
   if (isLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
         <div className="w-8 h-8 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin mb-4" />
-        <p className="text-body-md text-emerald-900 font-medium">Loading visibility dashboard...</p>
+        <p className="text-body-md text-emerald-900 font-medium">Loading live visibility dashboard...</p>
       </div>
     );
   }
 
-  if (isEmpty) {
+  if (isEmpty || error) {
     return (
       <PageTransition>
         <div className="max-w-4xl mx-auto px-page py-20 text-center">
@@ -54,18 +69,20 @@ export default function DashboardPage() {
             <AlertCircle size={32} />
           </div>
           <h1 className="text-display-md mb-4 text-slate-900 font-display">
-            No Live Analysis Data Yet
+            No Live Analysis Data Found
           </h1>
           <p className="text-body-lg text-slate-600 max-w-xl mx-auto mb-8">
-            Start by running your first live AI visibility analysis. CiteScope will query live AI engines and generate real metrics.
+            {error || 'Run your first live AI visibility analysis to measure how Gemini and AI answer engines perceive and rank your brand.'}
           </p>
-          <Link
-            href="/runs/new"
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
-          >
-            <Zap size={16} className="text-yellow-300 fill-yellow-300" />
-            Run Your First Live Analysis
-          </Link>
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/runs/new"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
+            >
+              <Zap size={16} className="text-yellow-300 fill-yellow-300" />
+              Run Your First Live Analysis
+            </Link>
+          </div>
         </div>
       </PageTransition>
     );
@@ -78,13 +95,13 @@ export default function DashboardPage() {
         <header className="mb-12">
           <div className="flex items-center gap-4 mb-4 text-label-caps" style={{ color: 'var(--secondary)' }}>
             <span className="flex items-center gap-1">
-              <Filter size={14} /> Filters:
+              <Filter size={14} /> Brand Filter:
             </span>
             <span className="px-3 py-1 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-900 font-medium">
-              Brand: {d.brandName || 'Pixis'}
+              Brand: {d.brandName}
             </span>
             <span className="px-3 py-1 rounded-full border bg-slate-50 border-slate-200 text-slate-700">
-              Period: {d.period || '7D Live Audit'}
+              Live Database Record
             </span>
           </div>
 
@@ -97,24 +114,28 @@ export default function DashboardPage() {
                 <span
                   className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border"
                   style={{
-                    backgroundColor: isDemo ? 'rgba(234, 179, 8, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                    color: isDemo ? '#B45309' : '#059669',
-                    borderColor: isDemo ? 'rgba(234, 179, 8, 0.3)' : 'rgba(16, 185, 129, 0.3)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    color: '#059669',
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
                   }}
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full ${isDemo ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}
-                  />
-                  {isDemo ? 'DEMO DATA' : 'LIVE ANALYSIS DATA'}
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  LIVE GEMINI DATA
                 </span>
               </div>
               <p className="text-body-lg max-w-2xl" style={{ color: 'var(--on-surface-variant)' }}>
-                Empirical visibility analysis of how AI search engines perceive, recommend, and synthesize
-                your brand across industry queries.
+                Empirical visibility metrics calculated from live AI search responses for {d.brandName}.
               </p>
             </div>
 
-            <div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={loadDashboardData}
+                className="p-3 rounded-full border border-slate-200 hover:bg-slate-100 transition-colors text-slate-700"
+                title="Refresh Metrics"
+              >
+                <RefreshCw size={16} />
+              </button>
               <Link
                 href="/runs/new"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-800 text-white font-semibold text-xs uppercase tracking-wider shadow-sm hover:bg-emerald-900 transition-colors"
@@ -152,7 +173,7 @@ export default function DashboardPage() {
                   AI Visibility Score
                 </h2>
                 <p className="text-body-md" style={{ color: 'var(--on-secondary-container)' }}>
-                  Prominence across all monitored AI answer engines.
+                  Percentage of analyzed AI responses mentioning {d.brandName}.
                 </p>
               </div>
               <div className="text-right">
@@ -167,7 +188,7 @@ export default function DashboardPage() {
                   className="text-label-caps flex items-center justify-end gap-1 mt-1"
                   style={{ color: 'var(--primary-container)' }}
                 >
-                  <TrendingUp size={14} /> Live Calculated Metric
+                  <TrendingUp size={14} /> Deterministic DB Metric
                 </div>
               </div>
             </div>
@@ -208,23 +229,23 @@ export default function DashboardPage() {
             }}
           >
             <div>
-              <h2 className="text-headline-sm mb-1">Share of Voice</h2>
+              <h2 className="text-headline-sm mb-1">Share of Mentions</h2>
               <p className="text-body-md opacity-80 mb-6">Versus primary competitors</p>
             </div>
             <div>
-              <div className="text-metric-num mb-4">{d.shareOfMentions ?? d.shareOfVoice?.[0]?.share ?? 0}%</div>
+              <div className="text-metric-num mb-4">{d.shareOfMentions ?? 0}%</div>
               <div className="space-y-3">
-                {(d.competitorShares || d.shareOfVoice || []).map((c: any, i: number) => (
+                {(d.competitorShares || []).map((c: any, i: number) => (
                   <div key={c.name} className="bar-chart-row">
                     <span
-                      className="w-[120px] text-sm"
+                      className="w-[120px] text-sm truncate"
                       style={{
                         fontFamily: "'Hanken Grotesk'",
                         color: '#93000a',
-                        fontWeight: i === 0 ? 700 : 400,
+                        fontWeight: c.name === d.brandName ? 700 : 400,
                       }}
                     >
-                      {c.name}
+                      {c.name} {c.name === d.brandName ? '(You)' : ''}
                     </span>
                     <div className="bar-track" style={{ backgroundColor: 'rgba(255,255,255,0.5)' }}>
                       <div
@@ -232,7 +253,7 @@ export default function DashboardPage() {
                         style={{
                           width: `${c.share}%`,
                           backgroundColor: '#93000a',
-                          opacity: i === 0 ? 1 : i === 1 ? 0.6 : 0.4,
+                          opacity: c.name === d.brandName ? 1 : 0.5,
                         }}
                       />
                     </div>
@@ -261,7 +282,7 @@ export default function DashboardPage() {
               className="h-full flex flex-col"
             >
               <p className="text-body-md leading-relaxed flex-grow" style={{ color: '#271900' }}>
-                {d.insights?.[0]?.observation || d.aiInsight || 'Run live analysis to generate competitive insight notes.'}
+                {d.insights?.[0]?.observation || `${d.brandName} has an AI visibility score of ${d.visibilityScore}%. Run additional prompts to uncover deeper competitive gap insights.`}
               </p>
               {d.insights?.[0]?.id && (
                 <div className="mt-4 pt-4 border-t border-amber-300/60">
@@ -291,9 +312,9 @@ export default function DashboardPage() {
                   >
                     <div
                       className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs"
-                      style={{ backgroundColor: engine.engineColor || '#123c2f' }}
+                      style={{ backgroundColor: engine.engineColor || '#8E75B2' }}
                     >
-                      {engine.abbreviation || engine.engineName?.[0]}
+                      {engine.abbreviation || 'GEM'}
                     </div>
                     <h3 className="font-semibold text-body-md" style={{ color: 'var(--on-surface)' }}>
                       {engine.engineName}
@@ -301,11 +322,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-3 text-xs">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-600">Frequency</span>
-                      <span className="font-bold text-slate-900">{engine.mentionFrequency || 'Medium'}</span>
+                      <span className="text-slate-600">Mention Frequency</span>
+                      <span className="font-bold text-slate-900">{engine.mentionFrequency || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-600">Avg. Position</span>
+                      <span className="text-slate-600">Avg. Rank Position</span>
                       <span className="font-bold text-slate-900">{engine.avgPosition ? `#${engine.avgPosition}` : 'N/A'}</span>
                     </div>
                   </div>

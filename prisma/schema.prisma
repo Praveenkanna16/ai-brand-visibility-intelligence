@@ -5,7 +5,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ─── Brand ──────────────────────────────────────────────────
@@ -34,6 +34,7 @@ model Competitor {
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
+  @@unique([brandId, name])
   @@index([brandId])
 }
 
@@ -41,7 +42,7 @@ model Competitor {
 model AIEngine {
   id          String   @id @default(uuid())
   name        String   @unique
-  provider    String   // gemini, openai, anthropic, perplexity
+  provider    String   // gemini
   modelId     String
   displayName String
   enabled     Boolean  @default(true)
@@ -70,6 +71,7 @@ model Prompt {
 model Run {
   id                String    @id @default(uuid())
   brandId           String
+  sessionId         String?   // Anonymous session ownership
   status            String    @default("QUEUED")
   progressCurrent   Int       @default(0)
   progressTotal     Int       @default(0)
@@ -77,7 +79,7 @@ model Run {
   currentStepDetail String?
   enginesUsed       String?   // JSON string
   competitorNames   String?   // JSON string
-  promptIds         String?   // JSON string
+  promptTexts       String?   // JSON string
   startedAt         DateTime?
   completedAt       DateTime?
   error             String?
@@ -90,6 +92,7 @@ model Run {
 
   @@index([brandId])
   @@index([status])
+  @@index([sessionId])
 }
 
 // ─── RunResult ──────────────────────────────────────────────
@@ -107,7 +110,7 @@ model RunResult {
   relevantClaims       String?  // JSON string
   evidence             String?  // JSON string
   confidence           Float?
-  status               String?  // gap_detected, favorable, high_priority_gap, needs_optimization
+  status               String?  // completed, failed, error
   statusLabel          String?
   createdAt            DateTime @default(now())
 

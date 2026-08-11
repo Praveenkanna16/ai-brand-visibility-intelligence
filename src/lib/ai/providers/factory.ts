@@ -1,40 +1,23 @@
 import { LLMProvider } from './base';
 import { GeminiProvider } from './gemini';
-import { OpenAIProvider } from './openai';
-import { AnthropicProvider } from './anthropic';
-import { DemoProvider } from './demo';
 
 export class LLMProviderFactory {
-  static getProvider(providerName: string, engineId?: string): LLMProvider {
-    const isDemoMode = process.env.DEMO_MODE === 'true';
+  static getProvider(providerName: string): LLMProvider {
+    const normalized = providerName.toLowerCase();
 
-    if (isDemoMode) {
-      return new DemoProvider(engineId);
+    if (normalized !== 'gemini') {
+      throw new Error(
+        `Provider "${providerName}" is not configured. Only "gemini" is currently available.`
+      );
     }
 
-    switch (providerName.toLowerCase()) {
-      case 'gemini':
-        if (process.env.GEMINI_API_KEY) {
-          return new GeminiProvider(process.env.GEMINI_API_KEY);
-        }
-        break;
-      case 'openai':
-        if (process.env.OPENAI_API_KEY) {
-          return new OpenAIProvider(process.env.OPENAI_API_KEY);
-        }
-        break;
-      case 'anthropic':
-        if (process.env.ANTHROPIC_API_KEY) {
-          return new AnthropicProvider(process.env.ANTHROPIC_API_KEY);
-        }
-        break;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'GEMINI_API_KEY environment variable is not set. Live analysis is unavailable.'
+      );
     }
 
-    // Fallback to Gemini if key exists, otherwise DemoProvider
-    if (process.env.GEMINI_API_KEY) {
-      return new GeminiProvider(process.env.GEMINI_API_KEY);
-    }
-
-    return new DemoProvider(engineId);
+    return new GeminiProvider(apiKey);
   }
 }

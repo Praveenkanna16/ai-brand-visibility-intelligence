@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/client';
-import { demoBrief, demoInsights } from '@/lib/demo/data';
 import { BriefGenerator } from '@/lib/recommendations/brief-generator';
 
 export async function GET(
@@ -8,10 +7,6 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
-  if (id.startsWith('ins-demo') || id === 'ins-001') {
-    return NextResponse.json(demoBrief);
-  }
 
   try {
     const brief = await prisma.brief.findFirst({
@@ -47,21 +42,21 @@ export async function GET(
       });
     }
 
-    // Fallback: generate brief on demand if insight exists
+    // Check if parent insight exists to generate brief on demand
     const insight = await prisma.insight.findUnique({
       where: { id },
       include: { brand: true },
     });
 
-    if (insight) {
-      const generated = BriefGenerator.generateBriefFromInsight(insight as any);
-      return NextResponse.json(generated);
+    if (!insight) {
+      return NextResponse.json({ error: 'Brief or parent insight not found' }, { status: 404 });
     }
 
-    return NextResponse.json(demoBrief);
+    const generated = BriefGenerator.generateBriefFromInsight(insight as any);
+    return NextResponse.json(generated);
   } catch (err) {
     console.error(`[API /api/insights/${id}/brief] Error:`, err);
-    return NextResponse.json(demoBrief);
+    return NextResponse.json({ error: 'Failed to fetch strategic brief' }, { status: 500 });
   }
 }
 
@@ -71,10 +66,6 @@ export async function POST(
 ) {
   const { id } = await context.params;
 
-  if (id.startsWith('ins-demo') || id === 'ins-001') {
-    return NextResponse.json(demoBrief);
-  }
-
   try {
     const insight = await prisma.insight.findUnique({
       where: { id },
@@ -82,7 +73,7 @@ export async function POST(
     });
 
     if (!insight) {
-      return NextResponse.json(demoBrief);
+      return NextResponse.json({ error: 'Parent insight not found' }, { status: 404 });
     }
 
     const briefData = BriefGenerator.generateBriefFromInsight(insight as any);
@@ -137,6 +128,6 @@ export async function POST(
     return NextResponse.json(briefData);
   } catch (err) {
     console.error(`[API /api/insights/${id}/brief] POST Error:`, err);
-    return NextResponse.json(demoBrief);
+    return NextResponse.json({ error: 'Failed to generate brief' }, { status: 500 });
   }
 }

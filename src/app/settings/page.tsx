@@ -1,27 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
-import { demoSettings } from '@/lib/demo/data';
-import { Building2, Users, Cpu, Trash2, Plus, Check } from 'lucide-react';
+import { Building2, Users, Cpu, Trash2, Check, Loader2 } from 'lucide-react';
 import { fadeInUp, cardStagger, cardEntrance, buttonHover, buttonTap } from '@/lib/animations/variants';
 
 export default function SettingsPage() {
-  const [brandName, setBrandName] = useState(demoSettings.brand.name);
-  const [brandDomain, setBrandDomain] = useState(demoSettings.brand.domain);
-  const [brandDesc, setBrandDesc] = useState(demoSettings.brand.description);
-
-  const [competitors, setCompetitors] = useState(demoSettings.competitors);
+  const [brandName, setBrandName] = useState('');
+  const [brandDomain, setBrandDomain] = useState('');
+  const [brandDesc, setBrandDesc] = useState('');
+  const [competitors, setCompetitors] = useState<Array<{ id: string; name: string }>>([]);
   const [newCompName, setNewCompName] = useState('');
-
-  const [engines, setEngines] = useState(demoSettings.engines);
-
+  const [isLoading, setIsLoading] = useState(true);
   const [savedNotice, setSavedNotice] = useState(false);
 
-  const handleSaveProfile = () => {
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 3000);
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.brand) {
+            setBrandName(data.brand.name || '');
+            setBrandDomain(data.brand.domain || '');
+            setBrandDesc(data.brand.description || '');
+          }
+          if (data.competitors) {
+            setCompetitors(data.competitors);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const handleSaveProfile = async () => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          brandDomain,
+          brandDescription: brandDesc,
+        }),
+      });
+
+      if (res.ok) {
+        setSavedNotice(true);
+        setTimeout(() => setSavedNotice(false), 3000);
+      }
+    } catch (err) {
+      console.error('Error updating settings:', err);
+    }
   };
 
   const handleAddCompetitor = () => {
@@ -38,11 +74,14 @@ export default function SettingsPage() {
     setCompetitors(competitors.filter((c) => c.id !== id));
   };
 
-  const toggleEngine = (id: string) => {
-    setEngines(
-      engines.map((e) => (e.id === id ? { ...e, enabled: !e.enabled } : e))
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
+        <Loader2 size={36} className="animate-spin text-emerald-700 mb-4" />
+        <p className="text-body-md text-emerald-900 font-medium">Loading workspace settings...</p>
+      </div>
     );
-  };
+  }
 
   return (
     <PageTransition>
@@ -72,14 +111,14 @@ export default function SettingsPage() {
 
         {savedNotice && (
           <div
-            className="mb-8 p-4 rounded-xl border flex items-center gap-3 text-body-md font-bold animate-fadeIn"
+            className="mb-8 p-4 rounded-xl border flex items-center gap-3 text-body-md font-bold"
             style={{
               backgroundColor: 'rgba(192, 236, 217, 0.4)',
               borderColor: 'var(--primary-fixed)',
               color: 'var(--on-primary-fixed-variant)',
             }}
           >
-            <Check size={18} /> Settings updated successfully!
+            <Check size={18} /> Settings updated in PostgreSQL database!
           </div>
         )}
 
@@ -111,6 +150,7 @@ export default function SettingsPage() {
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g., Nike or Pixis"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
                     className="input-editorial w-full"
@@ -122,6 +162,7 @@ export default function SettingsPage() {
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g., nike.in or pixis.ai"
                     value={brandDomain}
                     onChange={(e) => setBrandDomain(e.target.value)}
                     className="input-editorial w-full"
@@ -135,6 +176,7 @@ export default function SettingsPage() {
                 </label>
                 <textarea
                   rows={2}
+                  placeholder="Provide brief context about products/services..."
                   value={brandDesc}
                   onChange={(e) => setBrandDesc(e.target.value)}
                   className="input-editorial w-full resize-none"
@@ -146,7 +188,7 @@ export default function SettingsPage() {
                   whileHover={buttonHover}
                   whileTap={buttonTap}
                   onClick={handleSaveProfile}
-                  className="px-6 py-3 rounded-full border text-label-caps font-bold transition-colors hover:bg-surface-container-high"
+                  className="px-6 py-3 rounded-full border text-label-caps font-bold hover:bg-slate-100 transition-colors"
                   style={{
                     borderColor: 'var(--outline-variant)',
                     color: 'var(--on-surface)',
@@ -222,44 +264,25 @@ export default function SettingsPage() {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-headline-sm flex items-center gap-2 mb-1" style={{ color: 'var(--primary)' }}>
-                  AI Engine Preferences
+                  AI Engine Configuration
                 </h2>
                 <p className="text-body-md" style={{ color: 'var(--secondary)' }}>
-                  Select which LLMs to include in your visibility analysis.
+                  Active LLM providers configured for server-side execution.
                 </p>
               </div>
               <Cpu size={24} style={{ color: 'var(--outline)' }} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {engines.map((engine) => (
-                <div
-                  key={engine.id}
-                  onClick={() => toggleEngine(engine.id)}
-                  className={`p-5 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
-                    engine.enabled ? 'ring-1' : 'opacity-60'
-                  }`}
-                  style={{
-                    backgroundColor: 'var(--surface-container-lowest)',
-                    borderColor: engine.enabled ? 'var(--primary-container)' : 'var(--outline-variant)',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={engine.enabled}
-                    onChange={() => {}}
-                    className="mt-1 rounded"
-                  />
-                  <div>
-                    <h4 className="text-body-lg font-bold mb-1" style={{ color: 'var(--primary)' }}>
-                      {engine.displayName}
-                    </h4>
-                    <p className="text-body-md text-sm" style={{ color: 'var(--secondary)' }}>
-                      {engine.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
+            <div className="p-5 rounded-xl border bg-emerald-50/50 border-emerald-200 flex items-start gap-4">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse mt-1.5" />
+              <div>
+                <h4 className="text-body-lg font-bold text-emerald-950 mb-1">
+                  Gemini (Live Server-Side Execution)
+                </h4>
+                <p className="text-body-md text-emerald-800 text-sm">
+                  Google Gemini 2.5 Flash model with 30s timeouts, bounded retries, and exponential backoff.
+                </p>
+              </div>
             </div>
           </motion.div>
         </motion.div>

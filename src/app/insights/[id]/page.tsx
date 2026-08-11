@@ -6,38 +6,39 @@ import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 import StickyNote from '@/components/ui/StickyNote';
-import { demoInsights } from '@/lib/demo/data';
-import { ArrowLeft, Lightbulb, ArrowRight, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Lightbulb, ArrowRight, CheckCircle2, XCircle, Loader2, AlertTriangle, Zap } from 'lucide-react';
 import { cardStagger, cardEntrance } from '@/lib/animations/variants';
 
 export default function VisibilityGapPage() {
   const params = useParams();
-  const id = (params?.id as string) || 'ins-001';
+  const id = params?.id as string;
 
   const [insight, setInsight] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
     async function loadInsight() {
+      setIsLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/insights/${id}`);
         if (res.ok) {
           const data = await res.json();
           setInsight(data);
         } else {
-          setInsight(demoInsights[0]);
+          setError('Insight not found in the database.');
         }
       } catch (err) {
         console.error('Error loading insight:', err);
-        setInsight(demoInsights[0]);
+        setError('Unable to connect to CiteScope server.');
       } finally {
         setIsLoading(false);
       }
     }
     loadInsight();
   }, [id]);
-
-  const ins = insight || demoInsights[0];
 
   if (isLoading) {
     return (
@@ -47,6 +48,41 @@ export default function VisibilityGapPage() {
       </div>
     );
   }
+
+  if (error || !insight) {
+    return (
+      <PageTransition>
+        <div className="max-w-4xl mx-auto px-page py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-100 text-red-800 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle size={32} />
+          </div>
+          <h1 className="text-display-md mb-4 text-slate-900 font-display">
+            Insight Not Found
+          </h1>
+          <p className="text-body-lg text-slate-600 max-w-xl mx-auto mb-8">
+            {error || 'The requested visibility gap insight could not be found in the database.'}
+          </p>
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold text-xs uppercase tracking-wider hover:bg-slate-100 transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+            <Link
+              href="/runs/new"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
+            >
+              <Zap size={16} className="text-yellow-300 fill-yellow-300" />
+              Run Live Analysis
+            </Link>
+          </div>
+        </div>
+      </PageTransition>
+    );
+  }
+
+  const ins = insight;
 
   return (
     <PageTransition>

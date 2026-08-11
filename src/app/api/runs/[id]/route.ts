@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, ensureDatabaseTables, inMemStore } from '@/lib/prisma/client';
-import { demoCompletedRun } from '@/lib/demo/data';
+import { prisma } from '@/lib/prisma/client';
 
 export async function GET(
   request: Request,
@@ -8,61 +7,30 @@ export async function GET(
 ) {
   const { id } = await context.params;
 
-  if (id === 'run-demo-001') {
-    return NextResponse.json(demoCompletedRun);
-  }
-
   try {
-    await ensureDatabaseTables();
-
-    let run: any = null;
-    try {
-      run = await prisma.run.findUnique({
-        where: { id },
-        include: {
-          brand: true,
-          results: {
-            include: {
-              prompt: true,
-              engine: true,
-            },
-            orderBy: { createdAt: 'asc' },
+    const run = await prisma.run.findUnique({
+      where: { id },
+      include: {
+        brand: true,
+        results: {
+          include: {
+            prompt: true,
+            engine: true,
           },
-          visibilityMetrics: {
-            take: 1,
-            orderBy: { createdAt: 'desc' },
-          },
-          insights: {
-            include: {
-              brief: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
+          orderBy: { createdAt: 'asc' },
         },
-      });
-    } catch {
-      run = null;
-    }
-
-    const memRun = inMemStore.runs.get(id);
-
-    if (!run && memRun) {
-      return NextResponse.json({
-        id: memRun.id,
-        brandName: memRun.brandName,
-        brandDomain: memRun.brandDomain || '',
-        status: memRun.status,
-        startedAt: memRun.startedAt,
-        completedAt: memRun.completedAt,
-        error: memRun.error,
-        competitorNames: memRun.competitorNames,
-        enginesUsed: memRun.enginesUsed,
-        promptIds: memRun.promptIds,
-        metrics: memRun.metrics || null,
-        results: memRun.results || [],
-        insights: memRun.insights || [],
-      });
-    }
+        visibilityMetrics: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+        insights: {
+          include: {
+            brief: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
 
     if (!run) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
@@ -80,7 +48,7 @@ export async function GET(
       error: run.error,
       competitorNames: JSON.parse(run.competitorNames || '[]'),
       enginesUsed: JSON.parse(run.enginesUsed || '[]'),
-      promptIds: JSON.parse(run.promptIds || '[]'),
+      promptTexts: JSON.parse(run.promptTexts || '[]'),
       metrics: latestMetric
         ? {
             visibilityScore: latestMetric.visibilityScore,
@@ -147,6 +115,9 @@ export async function GET(
     return NextResponse.json(formattedReport);
   } catch (err) {
     console.error(`[API /api/runs/${id}] GET Error:`, err);
-    return NextResponse.json({ error: 'Failed to fetch run analysis' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch run analysis' },
+      { status: 500 }
+    );
   }
 }

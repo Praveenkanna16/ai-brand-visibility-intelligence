@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/client';
-import { demoInsights } from '@/lib/demo/data';
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
-  if (id.startsWith('ins-demo') || id === 'ins-001' || id === 'ins-002') {
-    const demo = demoInsights.find((i) => i.id === id) || demoInsights[0];
-    return NextResponse.json(demo);
-  }
 
   try {
     const insight = await prisma.insight.findUnique({
@@ -24,8 +18,7 @@ export async function GET(
     });
 
     if (!insight) {
-      const fallback = demoInsights.find((i) => i.id === id) || demoInsights[0];
-      return NextResponse.json(fallback);
+      return NextResponse.json({ error: 'Insight not found' }, { status: 404 });
     }
 
     return NextResponse.json({

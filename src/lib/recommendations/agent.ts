@@ -23,23 +23,6 @@ export class RecommendationAgent {
     targetBrand: string;
     winningCompetitor: string;
   }): Promise<RecommendationResult> {
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-
-    if (isDemoMode || (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY)) {
-      return {
-        observation: `Competitor (${input.winningCompetitor}) is monopolizing the primary recommendation slot for enterprise queries around "${input.promptText}".`,
-        whyCompetitorWon: `Analysis of AI response patterns indicates that ${input.winningCompetitor} has established authoritative semantic links between the primary query and their platform capabilities. Their content strategy emphasizes long-form technical guides that LLMs prioritize over standard marketing copy. ${input.targetBrand} lacks substantive indexable content addressing this topic directly.`,
-        evidenceText: `AI response explicitly cited recent industry benchmarks and case studies associated with ${input.winningCompetitor}.`,
-        hypothesis: `To displace ${input.winningCompetitor} in this prompt context, ${input.targetBrand} must publish high-authority content specifically targeting enterprise deployment milestones and predictive scaling benchmarks.`,
-        recommendedAction: `Create a comprehensive technical whitepaper and comparison guide on AI Ad Performance Platforms focusing on predictive scaling.`,
-        contentType: 'Comparison Guide / Whitepaper',
-        contentAngle: 'Technical deep-dive on predictive scaling and enterprise deployment timelines',
-        suggestedEvidence: 'Customer case studies demonstrating >20% ROAS improvement',
-        confidence: 0.88,
-        limitations: 'Based on current LLM response snapshot. Results vary by model version.',
-      };
-    }
-
     try {
       const provider = LLMProviderFactory.getProvider('gemini');
       const prompt = `You are a strategic AI Answer-Engine Visibility Analyst.
@@ -55,9 +38,9 @@ ${input.rawResponse}
 The target brand "${input.targetBrand}" was NOT mentioned.
 The competitor "${input.winningCompetitor}" WAS mentioned.
 
-Perform a deep semantic audit. Explain EXACTLY why the competitor won this citation and what strategic content ${input.targetBrand} must create to win this recommendation in future AI runs.
+Perform a deep semantic audit. Explain EXACTLY why the competitor won this citation and what specific, actionable content ${input.targetBrand} must create to win this recommendation in future AI runs.
 
-DO NOT give generic advice like "create high quality content" or "improve SEO". Be hyper-specific to the prompt context.
+DO NOT give generic advice like "create high quality content" or "improve SEO". Be hyper-specific to the prompt context, the actual response content, and the brands involved.
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -69,30 +52,40 @@ Return ONLY a valid JSON object matching this schema:
   "contentType": string,
   "contentAngle": string,
   "suggestedEvidence": string,
-  "confidence": number,
+  "confidence": number (0.0 to 1.0),
   "limitations": string
 }`;
 
       const res = await provider.generateResponse(prompt, {
-        systemPrompt: 'You are an expert AI visibility analyst. Output strictly valid JSON.',
+        systemPrompt:
+          'You are an expert AI visibility analyst. Output strictly valid JSON. No markdown, no code fences.',
       });
 
-      const jsonStr = res.rawResponse.replace(/```json|```/g, '').trim();
+      const jsonStr = res.rawResponse
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
       const parsed = JSON.parse(jsonStr);
       return RecommendationSchema.parse(parsed);
     } catch (err) {
-      console.warn('RecommendationAgent LLM failed, using structured fallback:', err);
+      console.warn(
+        '[RecommendationAgent] LLM analysis failed, using structured fallback:',
+        err instanceof Error ? err.message : err
+      );
+
+      // Structured fallback based on actual input data — NOT generic boilerplate
       return {
-        observation: `Competitor ${input.winningCompetitor} received primary recommendation for query "${input.promptText}".`,
-        whyCompetitorWon: `The AI response cited authoritative third-party reviews and targeted landing pages associated with ${input.winningCompetitor}.`,
-        evidenceText: `Direct citations found for ${input.winningCompetitor}.`,
-        hypothesis: `Publishing explicit comparative benchmarks will help ${input.targetBrand} gain visibility.`,
-        recommendedAction: `Publish targeted comparison guide addressing ${input.promptText}.`,
-        contentType: 'Comparison Guide',
-        contentAngle: 'Enterprise ROI and predictive automation',
-        suggestedEvidence: 'Third-party benchmark data',
-        confidence: 0.8,
-        limitations: 'Model response variation.',
+        observation: `"${input.winningCompetitor}" received a recommendation for the query "${input.promptText}" while "${input.targetBrand}" was not mentioned.`,
+        whyCompetitorWon: `The AI response cited "${input.winningCompetitor}" in its answer. This suggests the competitor has stronger content signals or authoritative references for this specific query context.`,
+        evidenceText: `"${input.winningCompetitor}" appears in the AI-generated response for the query "${input.promptText}". "${input.targetBrand}" does not appear.`,
+        hypothesis: `Publishing targeted content that directly addresses the query "${input.promptText}" could help "${input.targetBrand}" gain visibility for this topic.`,
+        recommendedAction: `Create content specifically addressing "${input.promptText}" that positions "${input.targetBrand}" as a credible authority in this area.`,
+        contentType: 'Targeted Content',
+        contentAngle: `Direct response to: "${input.promptText}"`,
+        suggestedEvidence: 'Case studies, benchmarks, or third-party validations relevant to this query',
+        confidence: 0.65,
+        limitations:
+          'This analysis is based on a single AI response snapshot. LLM fallback was used because the detailed analysis could not be completed.',
       };
     }
   }

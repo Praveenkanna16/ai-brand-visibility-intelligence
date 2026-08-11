@@ -9,20 +9,17 @@ import { buttonHover, buttonTap, fadeInUp } from '@/lib/animations/variants';
 
 export default function NewRunPage() {
   const router = useRouter();
-  const [brandName, setBrandName] = useState('Nike');
-  const [brandDomain, setBrandDomain] = useState('nike.in');
-  const [competitors, setCompetitors] = useState(['Adidas', 'Puma']);
+  const [brandName, setBrandName] = useState('');
+  const [brandDomain, setBrandDomain] = useState('');
+  const [competitors, setCompetitors] = useState<string[]>([]);
   const [newCompetitor, setNewCompetitor] = useState('');
   const [newCompetitorDomain, setNewCompetitorDomain] = useState('');
-  const [prompts, setPrompts] = useState([
-    'What are the best running shoe brands for serious runners?',
-  ]);
-  const [newPrompt, setNewPrompt] = useState('');
+  const [prompts, setPrompts] = useState<string[]>(['']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const addCompetitor = () => {
-    if (newCompetitor.trim()) {
+    if (newCompetitor.trim() && !competitors.includes(newCompetitor.trim())) {
       setCompetitors([...competitors, newCompetitor.trim()]);
       setNewCompetitor('');
       setNewCompetitorDomain('');
@@ -39,13 +36,15 @@ export default function NewRunPage() {
 
   const handleSubmit = async () => {
     setErrorMsg('');
-    const activePrompts = [...prompts];
-    if (newPrompt.trim()) {
-      activePrompts.push(newPrompt.trim());
-    }
+    const activePrompts = prompts.map((p) => p.trim()).filter(Boolean);
 
     if (!brandName.trim()) {
       setErrorMsg('Target Brand name is required.');
+      return;
+    }
+
+    if (competitors.length === 0) {
+      setErrorMsg('At least one competitor is required.');
       return;
     }
 
@@ -62,7 +61,7 @@ export default function NewRunPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandName: brandName.trim(),
-          brandDomain: brandDomain.trim(),
+          brandDomain: brandDomain.trim() || undefined,
           competitors,
           engines: ['gemini'],
           prompts: activePrompts,
@@ -73,14 +72,6 @@ export default function NewRunPage() {
 
       if (!res.ok) {
         throw new Error(data.error || 'Unable to start the analysis. Please try again.');
-      }
-
-      if (data.report) {
-        try {
-          localStorage.setItem(`citescope_run_${data.id}`, JSON.stringify(data.report));
-        } catch {
-          // ignore quota
-        }
       }
 
       router.push(`/runs/${data.id}`);
@@ -127,7 +118,7 @@ export default function NewRunPage() {
             className="text-body-lg max-w-2xl"
             style={{ color: 'var(--secondary)' }}
           >
-            Configure your target brand, competitors, and industry queries below. CiteScope queries Gemini server-side to measure exact brand visibility and generate recommendations.
+            Configure your target brand, competitors, and category queries below. CiteScope queries Gemini server-side to measure exact brand visibility and generate evidence-backed recommendations.
           </motion.p>
         </header>
 
@@ -166,7 +157,7 @@ export default function NewRunPage() {
                   <input
                     className="input-editorial w-full text-body-lg"
                     type="text"
-                    placeholder="e.g., Nike or Pixis"
+                    placeholder="e.g., Nike, Pixis, or Apple"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
                     required
@@ -191,21 +182,6 @@ export default function NewRunPage() {
 
             {/* Competitors */}
             <section className="relative">
-              <div
-                className="absolute -right-4 -top-8 p-4 rounded-lg w-52 z-10 hidden md:block"
-                style={{
-                  backgroundColor: 'var(--tertiary-fixed)',
-                  color: 'var(--on-tertiary-fixed-variant)',
-                  transform: 'rotate(1.5deg)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                }}
-              >
-                <p className="text-label-caps mb-1">Analyst Note</p>
-                <p className="text-sm leading-tight">
-                  Enter competitor names (e.g. Puma, Adidas). Web domains are optional.
-                </p>
-              </div>
-
               <h2 className="text-headline-sm mb-6 flex items-center gap-2" style={{ color: 'var(--primary)' }}>
                 <Users size={20} style={{ color: 'var(--tertiary-container)' }} />
                 Competitors
@@ -213,17 +189,9 @@ export default function NewRunPage() {
               <div className="space-y-4">
                 {competitors.map((c, i) => (
                   <div key={i} className="flex items-center gap-4">
-                    <input
-                      className="input-editorial flex-grow text-body-lg"
-                      type="text"
-                      placeholder="Competitor Name (e.g., Adidas)"
-                      value={c}
-                      onChange={(e) => {
-                        const updated = [...competitors];
-                        updated[i] = e.target.value;
-                        setCompetitors(updated);
-                      }}
-                    />
+                    <span className="px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-sm font-semibold flex-grow">
+                      {c}
+                    </span>
                     <button
                       type="button"
                       onClick={() => removeCompetitor(i)}
@@ -238,7 +206,7 @@ export default function NewRunPage() {
                   <input
                     className="input-editorial sm:col-span-7 text-body-lg"
                     type="text"
-                    placeholder="Competitor Name (e.g. Puma)"
+                    placeholder="Competitor Name (e.g., Adidas, Puma, Smartly.io)"
                     value={newCompetitor}
                     onChange={(e) => setNewCompetitor(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCompetitor())}
@@ -253,8 +221,7 @@ export default function NewRunPage() {
                   <button
                     type="button"
                     onClick={addCompetitor}
-                    className="p-2 rounded-full transition-colors hover:opacity-70 sm:col-span-1 justify-self-center"
-                    style={{ color: 'var(--primary-container)' }}
+                    className="p-2 rounded-full transition-colors hover:opacity-70 sm:col-span-1 justify-self-center border border-emerald-300 bg-emerald-50 text-emerald-800"
                   >
                     <Plus size={18} />
                   </button>
@@ -264,7 +231,7 @@ export default function NewRunPage() {
 
             <hr style={{ borderColor: 'var(--outline-variant)' }} />
 
-            {/* AI Engines (Gemini Live ONLY as mandated by user prompt) */}
+            {/* AI Engines */}
             <section>
               <h2 className="text-headline-sm mb-6 flex items-center gap-2" style={{ color: 'var(--primary)' }}>
                 <Cpu size={20} style={{ color: 'var(--tertiary-container)' }} />
@@ -303,7 +270,7 @@ export default function NewRunPage() {
                 Category Prompts
               </h2>
               <p className="text-body-md mb-6" style={{ color: 'var(--secondary)' }}>
-                Enter the natural language questions users ask AI engines when searching for recommendations.
+                Enter the natural language queries users ask AI answer engines when searching for recommendations.
               </p>
               <div className="space-y-6">
                 {prompts.map((p, i) => (
@@ -317,6 +284,7 @@ export default function NewRunPage() {
                     <textarea
                       className="input-editorial w-full text-body-lg resize-none"
                       rows={2}
+                      placeholder={`e.g., What are the best running shoes for serious runners?`}
                       value={p}
                       onChange={(e) => {
                         const updated = [...prompts];
@@ -336,29 +304,13 @@ export default function NewRunPage() {
                     )}
                   </div>
                 ))}
-                <div className="relative flex items-start gap-3">
-                  <span
-                    className="text-sm font-display pt-3"
-                    style={{ color: 'var(--outline)' }}
-                  >
-                    {String(prompts.length + 1).padStart(2, '0')}
-                  </span>
-                  <textarea
-                    className="input-editorial w-full text-body-lg resize-none"
-                    rows={2}
-                    placeholder="Add another query prompt (e.g. What are the best running shoe brands?)..."
-                    value={newPrompt}
-                    onChange={(e) => setNewPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && newPrompt.trim()) {
-                        e.preventDefault();
-                        setPrompts([...prompts, newPrompt.trim()]);
-                        setNewPrompt('');
-                      }
-                    }}
-                    style={{ color: 'var(--outline)' }}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setPrompts([...prompts, ''])}
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-800 hover:text-emerald-950 pt-2"
+                >
+                  <Plus size={16} /> Add Query Prompt
+                </button>
               </div>
             </section>
 
@@ -369,7 +321,7 @@ export default function NewRunPage() {
             >
               <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
-                Live Gemini Server-Side Execution Active
+                Live Gemini Execution Active
               </div>
 
               <div className="flex gap-4">
@@ -378,7 +330,7 @@ export default function NewRunPage() {
                   disabled={isSubmitting}
                   whileHover={buttonHover}
                   whileTap={buttonTap}
-                  className="px-8 py-4 rounded-full text-label-caps flex items-center gap-3 shadow-md transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="px-8 py-4 rounded-full text-label-caps flex items-center gap-3 shadow-md transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
                   style={{
                     backgroundColor: 'var(--primary-container)',
                     color: 'var(--on-primary)',

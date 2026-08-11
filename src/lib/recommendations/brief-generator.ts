@@ -1,6 +1,5 @@
 import { LLMProviderFactory } from '@/lib/ai/providers/factory';
 import { z } from 'zod';
-import { RecommendationResult } from './agent';
 
 export const BriefSchema = z.object({
   title: z.string(),
@@ -39,50 +38,68 @@ export class BriefGenerator {
     limitations?: string | null;
     competitorName?: string | null;
   }): BriefResult {
+    const queryText = insight.promptText || 'Category Query';
+    const competitor = insight.competitorName || 'Competitor';
+
     return {
-      title: `Strategic Brief: Winning "${insight.promptText || 'Category Queries'}"`,
-      targetQuery: insight.promptText || 'Category Query',
-      visibilityGap: 'High',
-      competitorAdvantage: insight.whyCompetitorWon || 'Competitor currently holds primary AI citations.',
-      contentType: insight.contentType || 'Comparison Guide / Whitepaper',
-      strategicAngle: insight.contentAngle || 'Technical deep-dive and evidence-backed performance benchmarks.',
-      formatType: 'Long-form Technical Guide (2,500+ words)',
-      primaryAsset: 'Downloadable Benchmark Matrix & Case Study Template',
-      evidenceToInclude: insight.suggestedEvidence || 'Customer case studies, ROAS benchmarks, and implementation timeline data.',
+      title: `Strategic Brief: Winning "${queryText}"`,
+      targetQuery: queryText,
+      visibilityGap: 'Detected',
+      competitorAdvantage:
+        insight.whyCompetitorWon ||
+        `${competitor} currently holds primary AI citations for this query.`,
+      contentType: insight.contentType || 'Targeted Content',
+      strategicAngle:
+        insight.contentAngle ||
+        `Address the specific query context to displace ${competitor}.`,
+      formatType: 'Long-form Guide (2,000+ words)',
+      primaryAsset: 'Data-backed content addressing query intent',
+      evidenceToInclude:
+        insight.suggestedEvidence ||
+        'Relevant benchmarks, case studies, and third-party validations.',
       recommendedStructure: [
-        { title: '1. Executive Summary & Market Problem', description: 'Address core enterprise challenges and why legacy solutions fall short.' },
-        { title: '2. Predictive Automation & Technical Deep-Dive', description: 'Detail technical architecture, predictive scaling, and automated optimization workflows.' },
-        { title: '3. Comparative Benchmark Analysis', description: 'Provide concrete ROI data and benchmark comparisons vs competing tools.' },
-        { title: '4. Enterprise Implementation Plan', description: 'Step-by-step deployment timeline, stage-gates, and measurable success metrics.' },
+        {
+          title: '1. Direct Answer to Query',
+          description: `Open with a comprehensive response to "${queryText}" positioning your brand.`,
+        },
+        {
+          title: '2. Competitive Differentiation',
+          description: `Explain specific advantages over ${competitor} with data.`,
+        },
+        {
+          title: '3. Evidence & Validation',
+          description: 'Include third-party data, case studies, and measurable outcomes.',
+        },
+        {
+          title: '4. Action Plan',
+          description: insight.recommendedAction || 'Concrete next steps for implementation.',
+        },
       ],
-      reasoning: insight.observation || 'Enterprise buyers and LLMs prioritize authoritative, structured technical content.',
-      confidence: `${Math.round((insight.confidence || 0.88) * 100)}%`,
-      limitations: insight.limitations || 'LLM citations vary dynamically across model updates.',
-      analystNote: `High priority content brief to displace ${insight.competitorName || 'competitors'} in future AI runs.`,
+      reasoning:
+        insight.observation ||
+        'AI answer engines prioritize authoritative, well-structured content.',
+      confidence: `${Math.round((insight.confidence || 0.65) * 100)}%`,
+      limitations:
+        insight.limitations ||
+        'Based on a single analysis snapshot. AI responses vary by session and model version.',
+      analystNote: `Priority content brief to improve visibility against ${competitor} for this query.`,
     };
   }
 
   static async generate(
-    recommendation: RecommendationResult,
+    recommendation: {
+      observation: string;
+      whyCompetitorWon: string;
+      recommendedAction: string;
+      contentType: string;
+      contentAngle: string;
+      suggestedEvidence: string;
+      confidence: number;
+      limitations: string;
+    },
     targetBrand: string,
     promptText: string
   ): Promise<BriefResult> {
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-
-    if (isDemoMode || (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY)) {
-      return this.generateBriefFromInsight({
-        promptText,
-        observation: recommendation.observation,
-        whyCompetitorWon: recommendation.whyCompetitorWon,
-        recommendedAction: recommendation.recommendedAction,
-        contentType: recommendation.contentType,
-        contentAngle: recommendation.contentAngle,
-        suggestedEvidence: recommendation.suggestedEvidence,
-        confidence: recommendation.confidence,
-        limitations: recommendation.limitations,
-      });
-    }
-
     try {
       const provider = LLMProviderFactory.getProvider('gemini');
       const prompt = `You are a senior Content Strategist. Generate an actionable, professional Content Brief for target brand "${targetBrand}" based on this gap recommendation:
@@ -111,14 +128,21 @@ Return ONLY a valid JSON object matching this schema:
 }`;
 
       const res = await provider.generateResponse(prompt, {
-        systemPrompt: 'You are an expert content strategist. Output strictly valid JSON.',
+        systemPrompt:
+          'You are an expert content strategist. Output strictly valid JSON. No markdown, no code fences.',
       });
 
-      const jsonStr = res.rawResponse.replace(/```json|```/g, '').trim();
+      const jsonStr = res.rawResponse
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
       const parsed = JSON.parse(jsonStr);
       return BriefSchema.parse(parsed);
     } catch (err) {
-      console.warn('BriefGenerator LLM failed, using fallback:', err);
+      console.warn(
+        '[BriefGenerator] LLM failed, using structured fallback:',
+        err instanceof Error ? err.message : err
+      );
       return this.generateBriefFromInsight({
         promptText,
         observation: recommendation.observation,

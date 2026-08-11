@@ -1,15 +1,79 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
-import { demoTrends } from '@/lib/demo/data';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Calendar, TrendingUp, BarChart2 } from 'lucide-react';
+import { Zap, AlertCircle } from 'lucide-react';
 import { fadeInUp, cardStagger, cardEntrance } from '@/lib/animations/variants';
 
 export default function TrendsPage() {
-  const [period, setPeriod] = useState('30D');
+  const [period, setPeriod] = useState('ALL');
+  const [data, setData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadTrendsData() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/trends');
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          setError('Failed to load historical trend data.');
+        }
+      } catch (err) {
+        console.error('Error loading trends:', err);
+        setError('Unable to connect to CiteScope server.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadTrendsData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin mb-4" />
+        <p className="text-body-md text-emerald-900 font-medium">Loading historical visibility trajectory...</p>
+      </div>
+    );
+  }
+
+  const trends = data?.trends || [];
+
+  if (error || !data || data.emptyState || trends.length < 2) {
+    return (
+      <PageTransition>
+        <div className="max-w-4xl mx-auto px-page py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle size={32} />
+          </div>
+          <h1 className="text-display-md mb-4 text-slate-900 font-display">
+            Insufficient Run History for Trends
+          </h1>
+          <p className="text-body-lg text-slate-600 max-w-xl mx-auto mb-8">
+            Historical visibility trends require at least 2 completed analysis runs over time. Run another live analysis to track changes in visibility score and share of voice.
+          </p>
+          <Link
+            href="/runs/new"
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-emerald-800 text-white font-semibold uppercase tracking-wider text-xs shadow-md hover:bg-emerald-900 transition-colors"
+          >
+            <Zap size={16} className="text-yellow-300 fill-yellow-300" />
+            Run New Analysis
+          </Link>
+        </div>
+      </PageTransition>
+    );
+  }
+
+  const latest = trends[trends.length - 1];
 
   return (
     <PageTransition>
@@ -25,7 +89,7 @@ export default function TrendsPage() {
                 className="text-display-lg mb-4"
                 style={{ color: 'var(--primary)' }}
               >
-                Historical Trends
+                Historical Visibility Trends
               </motion.h1>
               <motion.p
                 variants={fadeInUp}
@@ -35,7 +99,7 @@ export default function TrendsPage() {
                 className="text-body-lg max-w-2xl"
                 style={{ color: 'var(--secondary)' }}
               >
-                Track changes in AI Visibility Score, Share of Voice, and average citation rankings over time.
+                Track changes in AI Visibility Score, Share of Mentions, and average citation rankings across past analysis runs stored in PostgreSQL.
               </motion.p>
             </div>
 
@@ -80,16 +144,16 @@ export default function TrendsPage() {
               </div>
               <div className="text-right">
                 <span className="text-metric-num" style={{ color: 'var(--primary)' }}>
-                  62%
+                  {latest?.visibilityScore ?? 0}%
                 </span>
-                <span className="text-label-caps block text-emerald-600 font-bold">+8.4% ({period})</span>
+                <span className="text-label-caps block text-emerald-600 font-bold">Latest Analysis Score</span>
               </div>
             </div>
 
             {/* Recharts Line Chart */}
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={demoTrends}>
+                <LineChart data={trends}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e2dd" vertical={false} />
                   <XAxis
                     dataKey="date"
@@ -130,7 +194,7 @@ export default function TrendsPage() {
                     strokeWidth={2}
                     strokeDasharray="4 4"
                     dot={{ fill: '#f8bd4b', r: 3 }}
-                    name="Share of Voice"
+                    name="Share of Mentions"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -141,34 +205,34 @@ export default function TrendsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <motion.div variants={cardEntrance} className="bento-card p-6">
               <span className="text-label-caps block mb-2" style={{ color: 'var(--secondary)' }}>
-                Average Position
+                Latest Average Position
               </span>
               <span className="text-metric-num" style={{ color: 'var(--primary)' }}>
-                1.8
+                {latest?.avgPosition ? `#${latest.avgPosition}` : 'N/A'}
               </span>
-              <span className="text-body-md block mt-2 text-emerald-700">↗ Improved from 3.2</span>
+              <span className="text-body-md block mt-2 text-emerald-700">Rank when cited by Gemini</span>
             </motion.div>
 
             <motion.div variants={cardEntrance} className="bento-card p-6">
               <span className="text-label-caps block mb-2" style={{ color: 'var(--secondary)' }}>
-                Total Brand Mentions
+                Total Analyzed Runs
               </span>
               <span className="text-metric-num" style={{ color: 'var(--primary)' }}>
-                40
+                {trends.length}
               </span>
               <span className="text-body-md block mt-2" style={{ color: 'var(--secondary)' }}>
-                Across 20 category prompts
+                Persisted in PostgreSQL database
               </span>
             </motion.div>
 
             <motion.div variants={cardEntrance} className="bento-card p-6">
               <span className="text-label-caps block mb-2" style={{ color: 'var(--secondary)' }}>
-                Share of Voice Trend
+                Latest Share of Mentions
               </span>
               <span className="text-metric-num" style={{ color: 'var(--primary)' }}>
-                31%
+                {latest?.shareOfVoice ?? 0}%
               </span>
-              <span className="text-body-md block mt-2 text-emerald-700">↗ +9% increase over 90D</span>
+              <span className="text-body-md block mt-2 text-emerald-700">Versus competitor mentions</span>
             </motion.div>
           </div>
         </motion.div>

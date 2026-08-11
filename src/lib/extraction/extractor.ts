@@ -20,97 +20,147 @@ export const ExtractionSchema = z.object({
 
 export type ExtractionResult = z.infer<typeof ExtractionSchema>;
 
+// ─── Negation patterns ───
+const NEGATION_PATTERNS = [
+  /unlike\s+/i,
+  /not\s+/i,
+  /except\s+(for\s+)?/i,
+  /rather\s+than\s+/i,
+  /instead\s+of\s+/i,
+  /as\s+opposed\s+to\s+/i,
+  /however[\s,]+.*?\s+(?:doesn't|does not|isn't|is not|lacks?)\s/i,
+  /but\s+not\s+/i,
+  /excluding\s+/i,
+];
+
+function isNegatedMention(text: string, brandName: string): boolean {
+  const lowerText = text.toLowerCase();
+  const lowerBrand = brandName.toLowerCase();
+
+  // Find the brand mention position
+  const brandIndex = lowerText.indexOf(lowerBrand);
+  if (brandIndex < 0) return false;
+
+  // Check a window of ~80 chars before the brand mention for negation
+  const windowStart = Math.max(0, brandIndex - 80);
+  const windowText = lowerText.slice(windowStart, brandIndex + lowerBrand.length + 30);
+
+  for (const pattern of NEGATION_PATTERNS) {
+    if (pattern.test(windowText)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function ruleBased(
+  rawResponse: string,
+  targetBrand: string,
+  competitors: string[]
+): ExtractionResult {
+  const lowerRaw = rawResponse.toLowerCase();
+  const lowerTarget = targetBrand.toLowerCase();
+  const rawMentioned = lowerRaw.includes(lowerTarget);
+  const isNegated = rawMentioned && isNegatedMention(rawResponse, targetBrand);
+  const isMentioned = rawMentioned && !isNegated;
+
+  const competitorsMentioned = competitors.filter((c) =>
+    lowerRaw.includes(c.toLowerCase())
+  );
+
+  // Calculate position from numbered lists or sentence order
+  let position: number | null = null;
+  if (isMentioned) {
+    // Try to find numbered list position (e.g., "1. Nike", "2. Adidas")
+    const numberedPattern = new RegExp(
+      `(\\d+)[.\\)\\-]\\s*[^\\n]*?${targetBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+      'i'
+    );
+    const numberedMatch = rawResponse.match(numberedPattern);
+    if (numberedMatch) {
+      position = parseInt(numberedMatch[1], 10);
+    } else {
+      // Fall back to sentence-order position
+      const sentences = rawResponse.split(/[.!?\n]+/);
+      const mentionIdx = sentences.findIndex((s) =>
+        s.toLowerCase().includes(lowerTarget)
+      );
+      position = mentionIdx >= 0 ? Math.min(mentionIdx + 1, 10) : 1;
+    }
+  }
+
+  return {
+    mentioned: isMentioned,
+    position,
+    competitorsMentioned,
+    sentiment: isMentioned
+      ? isNegated
+        ? 'negative'
+        : 'neutral'
+      : null,
+    relevantClaims: [],
+    evidence: [
+      {
+        source: 'Rule-Based Extractor',
+        title: 'String Matching Analysis',
+        description: `${targetBrand} ${isMentioned ? 'was detected' : 'was not detected'}${isNegated ? ' (negated context)' : ''} in the AI response. ${competitorsMentioned.length > 0 ? `Competitors detected: ${competitorsMentioned.join(', ')}.` : 'No competitors detected.'}`,
+      },
+    ],
+    confidence: 0.6,
+  };
+}
+
 export class ExtractorAgent {
   static async extract(
     rawResponse: string,
     targetBrand: string,
     competitors: string[]
   ): Promise<ExtractionResult> {
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-
-    // Algorithmic extraction fallback / primary check
-    const lowerRaw = rawResponse.toLowerCase();
-    const lowerTarget = targetBrand.toLowerCase();
-    const isMentioned = lowerRaw.includes(lowerTarget);
-
-    const competitorsMentioned = competitors.filter((c) =>
-      lowerRaw.includes(c.toLowerCase())
-    );
-
-    // Calculate position
-    let position: number | null = null;
-    if (isMentioned) {
-      // Crude position estimation based on mention order
-      const sentences = rawResponse.split(/[.!?]+/);
-      const mentionIndex = sentences.findIndex((s) => s.toLowerCase().includes(lowerTarget));
-      position = mentionIndex >= 0 ? Math.min(mentionIndex + 1, 5) : 1;
-    }
-
-    if (isDemoMode || (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY)) {
-      return {
-        mentioned: isMentioned,
-        position,
-        competitorsMentioned,
-        sentiment: isMentioned ? 'positive' : null,
-        relevantClaims: isMentioned
-          ? [`Codeless AI infrastructure for ${targetBrand}`, 'Predictive ad optimization']
-          : ['Enterprise advertising automation'],
-        evidence: [
-          {
-            source: 'LLM Response Analysis',
-            title: 'Synthesized Search Engine Result',
-            description: `Extracted presence for ${targetBrand} alongside competitors: ${competitorsMentioned.join(', ') || 'None'}.`,
-          },
-        ],
-        confidence: 0.92,
-      };
-    }
-
-    // Call LLM with structured instruction
+    // Try LLM-based extraction first
     try {
       const provider = LLMProviderFactory.getProvider('gemini');
       const prompt = `Analyze the following AI answer engine response for mentions of the target brand "${targetBrand}" and competitors [${competitors.join(', ')}].
+
+IMPORTANT:
+- If the brand is mentioned in a NEGATIVE context (e.g., "unlike ${targetBrand}", "not ${targetBrand}"), set "mentioned" to false and "sentiment" to "negative".
+- "position" should be the 1-indexed rank if the brand appears in a numbered or ordered list, otherwise null.
+- Only include competitors from the provided list that are actually mentioned.
+- "relevantClaims" should be specific claims from the text, not generic descriptions.
 
 AI Response:
 """
 ${rawResponse}
 """
 
-Return ONLY a valid JSON object matching this exact JSON schema:
+Return ONLY a valid JSON object matching this exact schema:
 {
   "mentioned": boolean,
-  "position": number or null (1-indexed rank if listed, else null),
-  "competitorsMentioned": string[] (list of competitor names found),
+  "position": number or null,
+  "competitorsMentioned": string[],
   "sentiment": "positive" | "neutral" | "negative" | null,
-  "relevantClaims": string[] (key claims made about the brands),
+  "relevantClaims": string[],
   "evidence": [{"source": string, "title": string, "description": string}],
-  "confidence": number (between 0.0 and 1.0)
+  "confidence": number (0.0 to 1.0)
 }`;
 
       const response = await provider.generateResponse(prompt, {
-        systemPrompt: 'You are an expert AI Search & Semantic Extraction Agent. Output strictly JSON.',
+        systemPrompt:
+          'You are an expert AI Search & Semantic Extraction Agent. Output strictly valid JSON. No markdown, no code fences.',
       });
 
-      const jsonStr = response.rawResponse.replace(/```json|```/g, '').trim();
+      const jsonStr = response.rawResponse
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
       const parsed = JSON.parse(jsonStr);
       return ExtractionSchema.parse(parsed);
     } catch (err) {
-      console.warn('Extraction LLM failed, using fallback rule-based extraction:', err);
-      return {
-        mentioned: isMentioned,
-        position,
-        competitorsMentioned,
-        sentiment: isMentioned ? 'neutral' : null,
-        relevantClaims: ['Automated ad optimization'],
-        evidence: [
-          {
-            source: 'Fallback Rule Extractor',
-            title: 'Direct String Matching',
-            description: `Brand ${targetBrand} ${isMentioned ? 'was' : 'was not'} detected in the raw response.`,
-          },
-        ],
-        confidence: 0.8,
-      };
+      console.warn(
+        '[Extractor] LLM extraction failed, using rule-based fallback:',
+        err instanceof Error ? err.message : err
+      );
+      return ruleBased(rawResponse, targetBrand, competitors);
     }
   }
 }
