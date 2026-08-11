@@ -7,39 +7,25 @@ import PageTransition from '@/components/layout/PageTransition';
 import { Target, Users, Cpu, MessageSquare, X, Plus, ArrowRight, Loader2, Zap } from 'lucide-react';
 import { buttonHover, buttonTap, fadeInUp } from '@/lib/animations/variants';
 
-const defaultEngines = [
-  { id: 'gemini', label: 'Gemini Advanced (Live)', checked: true },
-  { id: 'chatgpt', label: 'ChatGPT (GPT-4)', checked: true },
-  { id: 'perplexity', label: 'Perplexity Pro', checked: true },
-  { id: 'claude', label: 'Claude 3.5 Opus', checked: false },
-];
-
 export default function NewRunPage() {
   const router = useRouter();
-  const [brandName, setBrandName] = useState('Pixis');
-  const [brandDomain, setBrandDomain] = useState('pixis.ai');
-  const [competitors, setCompetitors] = useState(['Smartly.io', 'Albert.ai', 'Madgicx', 'AdCreative.ai']);
+  const [brandName, setBrandName] = useState('Nike');
+  const [brandDomain, setBrandDomain] = useState('nike.in');
+  const [competitors, setCompetitors] = useState(['Adidas', 'Puma']);
   const [newCompetitor, setNewCompetitor] = useState('');
-  const [engines, setEngines] = useState(defaultEngines);
+  const [newCompetitorDomain, setNewCompetitorDomain] = useState('');
   const [prompts, setPrompts] = useState([
-    'What are the best AI platforms for optimizing advertising campaigns for ecommerce brands?',
-    'What are the best AI tools for improving ROAS?',
-    'Which AI platforms help brands automate paid advertising?',
+    'What are the best running shoe brands for serious runners?',
   ]);
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const toggleEngine = (id: string) => {
-    setEngines((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, checked: !e.checked } : e))
-    );
-  };
-
   const addCompetitor = () => {
     if (newCompetitor.trim()) {
       setCompetitors([...competitors, newCompetitor.trim()]);
       setNewCompetitor('');
+      setNewCompetitorDomain('');
     }
   };
 
@@ -64,13 +50,7 @@ export default function NewRunPage() {
     }
 
     if (activePrompts.length === 0) {
-      setErrorMsg('At least one prompt is required.');
-      return;
-    }
-
-    const selectedEngines = engines.filter((e) => e.checked).map((e) => e.id);
-    if (selectedEngines.length === 0) {
-      setErrorMsg('At least one AI engine must be selected.');
+      setErrorMsg('At least one query prompt is required.');
       return;
     }
 
@@ -84,7 +64,7 @@ export default function NewRunPage() {
           brandName: brandName.trim(),
           brandDomain: brandDomain.trim(),
           competitors,
-          engines: selectedEngines,
+          engines: ['gemini'],
           prompts: activePrompts,
         }),
       });
@@ -92,14 +72,13 @@ export default function NewRunPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to create analysis run');
+        throw new Error(data.error || 'Unable to start the analysis. Please try again.');
       }
 
-      // Redirect directly to the analysis progress page
       router.push(`/runs/${data.id}`);
     } catch (err: any) {
       console.error('Run creation error:', err);
-      setErrorMsg(err.message || 'Failed to start live analysis');
+      setErrorMsg(err.message || 'Unable to start the analysis. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -119,7 +98,7 @@ export default function NewRunPage() {
               }}
             >
               <Zap size={14} className="animate-pulse" />
-              LIVE ANALYSIS ENGINE
+              LIVE GEMINI ANALYSIS ENGINE
             </span>
           </div>
 
@@ -140,7 +119,7 @@ export default function NewRunPage() {
             className="text-body-lg max-w-2xl"
             style={{ color: 'var(--secondary)' }}
           >
-            Configure your target brand, competitors, and industry queries below. CiteScope will query live AI engines to measure your exact brand visibility.
+            Configure your target brand, competitors, and industry queries below. CiteScope queries Gemini server-side to measure exact brand visibility and generate recommendations.
           </motion.p>
         </header>
 
@@ -179,7 +158,7 @@ export default function NewRunPage() {
                   <input
                     className="input-editorial w-full text-body-lg"
                     type="text"
-                    placeholder="e.g., Pixis or Nike"
+                    placeholder="e.g., Nike or Pixis"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
                     required
@@ -187,12 +166,12 @@ export default function NewRunPage() {
                 </div>
                 <div>
                   <label className="block text-label-caps mb-2" style={{ color: 'var(--secondary)' }}>
-                    Primary Domain
+                    Primary Domain (Optional)
                   </label>
                   <input
                     className="input-editorial w-full text-body-lg"
                     type="text"
-                    placeholder="e.g., pixis.ai"
+                    placeholder="e.g., nike.in or pixis.ai"
                     value={brandDomain}
                     onChange={(e) => setBrandDomain(e.target.value)}
                   />
@@ -205,7 +184,7 @@ export default function NewRunPage() {
             {/* Competitors */}
             <section className="relative">
               <div
-                className="absolute -right-4 -top-8 p-4 rounded-lg w-48 z-10 hidden md:block"
+                className="absolute -right-4 -top-8 p-4 rounded-lg w-52 z-10 hidden md:block"
                 style={{
                   backgroundColor: 'var(--tertiary-fixed)',
                   color: 'var(--on-tertiary-fixed-variant)',
@@ -215,7 +194,7 @@ export default function NewRunPage() {
               >
                 <p className="text-label-caps mb-1">Analyst Note</p>
                 <p className="text-sm leading-tight">
-                  Adding at least 2–4 competitors yields robust Share of Voice comparison metrics.
+                  Enter competitor names (e.g. Puma, Adidas). Web domains are optional.
                 </p>
               </div>
 
@@ -229,6 +208,7 @@ export default function NewRunPage() {
                     <input
                       className="input-editorial flex-grow text-body-lg"
                       type="text"
+                      placeholder="Competitor Name (e.g., Adidas)"
                       value={c}
                       onChange={(e) => {
                         const updated = [...competitors];
@@ -246,20 +226,26 @@ export default function NewRunPage() {
                     </button>
                   </div>
                 ))}
-                <div className="flex items-center gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                   <input
-                    className="input-editorial flex-grow text-body-lg"
+                    className="input-editorial sm:col-span-7 text-body-lg"
                     type="text"
-                    placeholder="Add another competitor..."
+                    placeholder="Competitor Name (e.g. Puma)"
                     value={newCompetitor}
                     onChange={(e) => setNewCompetitor(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCompetitor())}
-                    style={{ color: 'var(--outline)' }}
+                  />
+                  <input
+                    className="input-editorial sm:col-span-4 text-body-md"
+                    type="text"
+                    placeholder="Domain (Optional)"
+                    value={newCompetitorDomain}
+                    onChange={(e) => setNewCompetitorDomain(e.target.value)}
                   />
                   <button
                     type="button"
                     onClick={addCompetitor}
-                    className="p-2 rounded-full transition-colors hover:opacity-70"
+                    className="p-2 rounded-full transition-colors hover:opacity-70 sm:col-span-1 justify-self-center"
                     style={{ color: 'var(--primary-container)' }}
                   >
                     <Plus size={18} />
@@ -270,33 +256,33 @@ export default function NewRunPage() {
 
             <hr style={{ borderColor: 'var(--outline-variant)' }} />
 
-            {/* AI Engines */}
+            {/* AI Engines (Gemini Live ONLY as mandated by user prompt) */}
             <section>
               <h2 className="text-headline-sm mb-6 flex items-center gap-2" style={{ color: 'var(--primary)' }}>
                 <Cpu size={20} style={{ color: 'var(--tertiary-container)' }} />
-                AI Engines
+                AI Engine Selection
               </h2>
-              <div className="flex flex-wrap gap-4">
-                {engines.map((engine) => (
-                  <label key={engine.id} className="cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={engine.checked}
-                      onChange={() => toggleEngine(engine.id)}
-                    />
-                    <div
-                      className="px-6 py-3 rounded-full border text-label-caps transition-all peer-checked:text-white"
-                      style={{
-                        backgroundColor: engine.checked ? 'var(--primary-container)' : 'transparent',
-                        color: engine.checked ? 'var(--on-primary)' : 'var(--secondary)',
-                        borderColor: engine.checked ? 'var(--primary-container)' : 'var(--outline-variant)',
-                      }}
-                    >
-                      {engine.label}
-                    </div>
-                  </label>
-                ))}
+              <div className="flex flex-wrap items-center gap-4">
+                <div
+                  className="px-6 py-3 rounded-full text-label-caps font-bold flex items-center gap-2 shadow-sm"
+                  style={{
+                    backgroundColor: 'var(--primary-container)',
+                    color: 'var(--on-primary)',
+                  }}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Gemini — Live
+                </div>
+                <div
+                  className="px-6 py-3 rounded-full text-label-caps opacity-60 border"
+                  style={{
+                    backgroundColor: 'var(--surface-container)',
+                    borderColor: 'var(--outline-variant)',
+                    color: 'var(--secondary)',
+                  }}
+                >
+                  More Engines Coming Soon (ChatGPT, Claude, Perplexity)
+                </div>
               </div>
             </section>
 
@@ -309,7 +295,7 @@ export default function NewRunPage() {
                 Category Prompts
               </h2>
               <p className="text-body-md mb-6" style={{ color: 'var(--secondary)' }}>
-                Enter the natural language questions users ask AI answer engines when researching your category.
+                Enter the natural language questions users ask AI engines when searching for recommendations.
               </p>
               <div className="space-y-6">
                 {prompts.map((p, i) => (
@@ -352,7 +338,7 @@ export default function NewRunPage() {
                   <textarea
                     className="input-editorial w-full text-body-lg resize-none"
                     rows={2}
-                    placeholder="Add another natural query prompt..."
+                    placeholder="Add another query prompt (e.g. What are the best running shoe brands?)..."
                     value={newPrompt}
                     onChange={(e) => setNewPrompt(e.target.value)}
                     onKeyDown={(e) => {
@@ -375,7 +361,7 @@ export default function NewRunPage() {
             >
               <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
-                Live Gemini Server-Side Execution Enabled
+                Live Gemini Server-Side Execution Active
               </div>
 
               <div className="flex gap-4">

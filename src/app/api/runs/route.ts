@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
 import { executeRunInBackground } from '@/lib/runner/execution-service';
-import { demoCompletedRun } from '@/lib/demo/data';
+import { waitUntil } from '@vercel/functions';
 
 const CreateRunSchema = z.object({
   brandName: z.string().min(1, 'Brand name is required'),
@@ -14,21 +14,12 @@ const CreateRunSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    await ensureDatabaseTables();
+
     const body = await request.json();
     const validated = CreateRunSchema.parse(body);
 
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-
-    if (isDemoMode) {
-      return NextResponse.json({
-        id: 'run-demo-001',
-        status: 'COMPLETED',
-        message: 'Demo mode enabled. Viewing demo analysis.',
-        run: demoCompletedRun,
-      });
-    }
-
-    // 1. Find or create Brand in Prisma DB
+    // 1. Find or create Brand in DB
     let brand = await prisma.brand.findFirst({
       where: { name: { equals: validated.brandName } },
     });
@@ -74,10 +65,14 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. Trigger Async Execution Service (non-blocking server-side background task)
-    executeRunInBackground(run.id).catch((err) => {
-      console.error(`[API /api/runs] Async execution error for run ${run.id}:`, err);
+    // 4. Trigger Async Execution Service (using @vercel/functions waitUntil if on Vercel)
+    const runPromise = executeRunInBackground(run.id).catch((err) => {
+      console.error(`[API /api/runs] Execution error for run ${run.id}:`, err);
     });
+
+    if (process.env.VERCEL === '1') {
+      waitUntil(runPromise);
+    }
 
     return NextResponse.json({
       id: run.id,
@@ -89,12 +84,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation Error', details: error.issues }, { status: 400 });
     }
     console.error('[API /api/runs] POST error:', error);
-    return NextResponse.json({ error: 'Failed to create analysis run' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to start the analysis. Please try again.' }, { status: 500 });
   }
 }
 
 export async function GET() {
   try {
+    await ensureDatabaseTables();
     const runs = await prisma.run.findMany({
       take: 20,
       orderBy: { createdAt: 'desc' },

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
 import { demoCompletedRun } from '@/lib/demo/data';
 
 export async function GET(
@@ -13,6 +13,7 @@ export async function GET(
   }
 
   try {
+    await ensureDatabaseTables();
     const run = await prisma.run.findUnique({
       where: { id },
       include: {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
 import { demoRunProgress } from '@/lib/demo/data';
 
 export async function GET(
@@ -13,6 +13,7 @@ export async function GET(
   }
 
   try {
+    await ensureDatabaseTables();
     const run = await prisma.run.findUnique({
       where: { id },
       include: { brand: true },
@@ -24,7 +25,6 @@ export async function GET(
 
     const enginesUsed: string[] = JSON.parse(run.enginesUsed || '["gemini"]');
     const pct = run.progressTotal > 0 ? Math.round((run.progressCurrent / run.progressTotal) * 100) : 0;
-
     const isCompleted = run.status === 'COMPLETED';
 
     const steps = [
