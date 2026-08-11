@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
 
 export async function GET(
   request: Request,
@@ -8,6 +8,8 @@ export async function GET(
   const { id } = await context.params;
 
   try {
+    await ensureDatabaseTables();
+
     const run = await prisma.run.findUnique({
       where: { id },
       include: { brand: true },
@@ -86,10 +88,10 @@ export async function GET(
       steps,
       engines,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(`[API /api/runs/${id}/progress] Error:`, err);
     return NextResponse.json(
-      { error: 'Failed to fetch progress' },
+      { error: `Failed to fetch progress: ${err?.message || String(err)}` },
       { status: 500 }
     );
   }

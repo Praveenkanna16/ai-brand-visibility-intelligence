@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
 import { executeRunInBackground } from '@/lib/runner/execution-service';
 import { waitUntil } from '@vercel/functions';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
@@ -42,10 +42,13 @@ export async function POST(request: Request) {
     // Check Gemini API key
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'Live analysis is currently unavailable. GEMINI_API_KEY is not configured.' },
+        { error: 'Live analysis is currently unavailable. GEMINI_API_KEY is not configured on the server.' },
         { status: 503 }
       );
     }
+
+    // Ensure database tables exist
+    await ensureDatabaseTables();
 
     // Find or create Brand
     let brand = await prisma.brand.findFirst({
@@ -111,7 +114,7 @@ export async function POST(request: Request) {
       status: 'QUEUED',
       message: 'Analysis queued. Poll /api/runs/{id}/progress for updates.',
     });
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Validation Error', details: error.issues },
@@ -119,8 +122,9 @@ export async function POST(request: Request) {
       );
     }
     console.error('[API /api/runs] POST error:', error);
+    const detailMsg = error?.message || String(error);
     return NextResponse.json(
-      { error: 'Unable to start the analysis. Please try again.' },
+      { error: `Unable to start analysis: ${detailMsg}` },
       { status: 500 }
     );
   }
@@ -128,6 +132,7 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
+    await ensureDatabaseTables();
     const runs = await prisma.run.findMany({
       take: 20,
       orderBy: { createdAt: 'desc' },
