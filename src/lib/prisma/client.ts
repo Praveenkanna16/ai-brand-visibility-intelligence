@@ -2,8 +2,43 @@ import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 
-const globalForPrisma = globalThis as unknown as {
+export interface InMemRun {
+  id: string;
+  brandId: string;
+  brandName: string;
+  brandDomain?: string;
+  status: string;
+  progressCurrent: number;
+  progressTotal: number;
+  currentStep?: string;
+  currentStepDetail?: string;
+  enginesUsed: string[];
+  competitorNames: string[];
+  promptIds: string[];
+  startedAt?: Date;
+  completedAt?: Date;
+  error?: string;
+  results: any[];
+  metrics?: any;
+  insights: any[];
+}
+
+const globalStore = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  citescopeRuns: Map<string, InMemRun> | undefined;
+  citescopeBrands: Map<string, any> | undefined;
+};
+
+if (!globalStore.citescopeRuns) {
+  globalStore.citescopeRuns = new Map<string, InMemRun>();
+}
+if (!globalStore.citescopeBrands) {
+  globalStore.citescopeBrands = new Map<string, any>();
+}
+
+export const inMemStore = {
+  runs: globalStore.citescopeRuns,
+  brands: globalStore.citescopeBrands,
 };
 
 function getDatabaseUrl(): string {
@@ -29,9 +64,9 @@ function createPrismaClient(): PrismaClient {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma = globalStore.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') globalStore.prisma = prisma;
 
 let dbInitialized = false;
 

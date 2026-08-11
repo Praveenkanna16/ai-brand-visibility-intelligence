@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables, inMemStore } from '@/lib/prisma/client';
 import { demoCompletedRun } from '@/lib/demo/data';
 
 export async function GET(
@@ -14,29 +14,55 @@ export async function GET(
 
   try {
     await ensureDatabaseTables();
-    const run = await prisma.run.findUnique({
-      where: { id },
-      include: {
-        brand: true,
-        results: {
-          include: {
-            prompt: true,
-            engine: true,
+
+    let run: any = null;
+    try {
+      run = await prisma.run.findUnique({
+        where: { id },
+        include: {
+          brand: true,
+          results: {
+            include: {
+              prompt: true,
+              engine: true,
+            },
+            orderBy: { createdAt: 'asc' },
           },
-          orderBy: { createdAt: 'asc' },
-        },
-        visibilityMetrics: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-        },
-        insights: {
-          include: {
-            brief: true,
+          visibilityMetrics: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
           },
-          orderBy: { createdAt: 'desc' },
+          insights: {
+            include: {
+              brief: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
         },
-      },
-    });
+      });
+    } catch {
+      run = null;
+    }
+
+    const memRun = inMemStore.runs.get(id);
+
+    if (!run && memRun) {
+      return NextResponse.json({
+        id: memRun.id,
+        brandName: memRun.brandName,
+        brandDomain: memRun.brandDomain || '',
+        status: memRun.status,
+        startedAt: memRun.startedAt,
+        completedAt: memRun.completedAt,
+        error: memRun.error,
+        competitorNames: memRun.competitorNames,
+        enginesUsed: memRun.enginesUsed,
+        promptIds: memRun.promptIds,
+        metrics: memRun.metrics || null,
+        results: memRun.results || [],
+        insights: memRun.insights || [],
+      });
+    }
 
     if (!run) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
@@ -65,7 +91,7 @@ export async function GET(
             competitorShares: JSON.parse(latestMetric.competitorShares || '[]'),
           }
         : null,
-      results: run.results.map((r) => ({
+      results: run.results.map((r: any) => ({
         id: r.id,
         promptId: r.promptId,
         promptText: r.prompt?.text || 'Prompt',
@@ -82,7 +108,7 @@ export async function GET(
         status: r.status,
         statusLabel: r.statusLabel,
       })),
-      insights: run.insights.map((i) => ({
+      insights: run.insights.map((i: any) => ({
         id: i.id,
         competitorName: i.competitorName,
         promptText: i.promptText,

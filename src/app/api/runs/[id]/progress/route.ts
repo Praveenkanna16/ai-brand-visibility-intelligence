@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, ensureDatabaseTables } from '@/lib/prisma/client';
+import { prisma, ensureDatabaseTables, inMemStore } from '@/lib/prisma/client';
 import { demoRunProgress } from '@/lib/demo/data';
 
 export async function GET(
@@ -14,10 +14,64 @@ export async function GET(
 
   try {
     await ensureDatabaseTables();
-    const run = await prisma.run.findUnique({
-      where: { id },
-      include: { brand: true },
-    });
+
+    let run: any = null;
+    try {
+      run = await prisma.run.findUnique({
+        where: { id },
+        include: { brand: true },
+      });
+    } catch {
+      run = null;
+    }
+
+    const memRun = inMemStore.runs.get(id);
+
+    if (!run && memRun) {
+      const pct = memRun.progressTotal > 0 ? Math.round((memRun.progressCurrent / memRun.progressTotal) * 100) : 0;
+      const isCompleted = memRun.status === 'COMPLETED';
+
+      return NextResponse.json({
+        id: memRun.id,
+        brandName: memRun.brandName,
+        status: memRun.status,
+        progressCurrent: memRun.progressCurrent,
+        progressTotal: memRun.progressTotal,
+        currentStep: memRun.currentStep || 'Processing',
+        currentStepDetail: memRun.currentStepDetail || '',
+        pctComplete: pct,
+        startedAt: memRun.startedAt,
+        completedAt: memRun.completedAt,
+        error: memRun.error,
+        steps: [
+          {
+            number: 1,
+            label: 'Querying AI Engines',
+            status: isCompleted || memRun.progressCurrent > 0 ? 'completed' : memRun.status === 'RUNNING' ? 'processing' : 'pending',
+          },
+          {
+            number: 2,
+            label: 'Extracting Brand Mentions',
+            status: isCompleted || memRun.progressCurrent >= Math.ceil(memRun.progressTotal * 0.5) ? 'completed' : memRun.progressCurrent > 0 ? 'processing' : 'pending',
+          },
+          {
+            number: 3,
+            label: 'Calculating Visibility Metrics',
+            status: isCompleted ? 'completed' : memRun.currentStep === 'Calculating Visibility Metrics' ? 'processing' : 'pending',
+          },
+          {
+            number: 4,
+            label: 'Generating Strategic Recommendations',
+            status: isCompleted ? 'completed' : memRun.currentStep === 'Generating Strategic Briefs' ? 'processing' : 'pending',
+          },
+        ],
+        engines: memRun.enginesUsed.map((e) => ({
+          name: e === 'gemini' ? 'Gemini Advanced' : e,
+          abbreviation: 'GEM',
+          status: isCompleted ? 'completed' : 'syncing',
+        })),
+      });
+    }
 
     if (!run) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
