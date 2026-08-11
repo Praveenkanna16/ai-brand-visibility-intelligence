@@ -1,15 +1,52 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 import StickyNote from '@/components/ui/StickyNote';
 import { demoInsights } from '@/lib/demo/data';
-import { ArrowLeft, Lightbulb, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import { fadeInUp, cardStagger, cardEntrance } from '@/lib/animations/variants';
+import { ArrowLeft, Lightbulb, ArrowRight, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { cardStagger, cardEntrance } from '@/lib/animations/variants';
 
-export default function VisibilityGapPage({ params }: { params: { id: string } }) {
-  const insight = demoInsights.find((i) => i.id === params.id) || demoInsights[0];
+export default function VisibilityGapPage() {
+  const params = useParams();
+  const id = (params?.id as string) || 'ins-001';
+
+  const [insight, setInsight] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadInsight() {
+      try {
+        const res = await fetch(`/api/insights/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setInsight(data);
+        } else {
+          setInsight(demoInsights[0]);
+        }
+      } catch (err) {
+        console.error('Error loading insight:', err);
+        setInsight(demoInsights[0]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadInsight();
+  }, [id]);
+
+  const ins = insight || demoInsights[0];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
+        <Loader2 size={36} className="animate-spin text-emerald-700 mb-4" />
+        <p className="text-body-md text-emerald-900 font-medium">Loading insight details...</p>
+      </div>
+    );
+  }
 
   return (
     <PageTransition>
@@ -17,11 +54,11 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
         {/* Breadcrumb */}
         <div className="mb-6">
           <Link
-            href="/prompts"
+            href="/dashboard"
             className="inline-flex items-center gap-2 text-label-caps hover:opacity-70 transition-opacity"
             style={{ color: 'var(--secondary)' }}
           >
-            <ArrowLeft size={14} /> Back to Prompts Matrix
+            <ArrowLeft size={14} /> Back to Dashboard
           </Link>
         </div>
 
@@ -40,10 +77,10 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
             </span>
           </div>
           <h1 className="text-display-lg mb-4" style={{ color: 'var(--primary)' }}>
-            "{insight.promptText}"
+            "{ins.promptText}"
           </h1>
           <p className="text-body-lg max-w-2xl" style={{ color: 'var(--secondary)' }}>
-            Comparative diagnostic mapping why AI engine recommendations favored competitors over Pixis.
+            Comparative diagnostic mapping why AI engine recommendations favored competitors over {ins.brandName || 'your brand'}.
           </p>
         </header>
 
@@ -66,7 +103,7 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   Target Brand
                 </span>
                 <h3 className="text-headline-sm" style={{ color: 'var(--primary)' }}>
-                  Pixis
+                  {ins.brandName || 'Target Brand'}
                 </h3>
               </div>
               <span
@@ -96,7 +133,7 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   Winning Entity
                 </span>
                 <h3 className="text-headline-sm" style={{ color: 'var(--primary)' }}>
-                  {insight.competitorName}
+                  {ins.competitorName}
                 </h3>
               </div>
               <span
@@ -106,11 +143,11 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   color: 'var(--on-primary-fixed-variant)',
                 }}
               >
-                <CheckCircle2 size={14} /> MENTIONED #{insight.competitorPosition || 1}
+                <CheckCircle2 size={14} /> MENTIONED
               </span>
             </div>
             <p className="text-body-md leading-relaxed" style={{ color: 'var(--secondary)' }}>
-              Cited in {insight.competitorCiteRate || 87}% of engine runs for this query domain.
+              Primary recommendation cited by AI answer engine for this query context.
             </p>
           </motion.div>
         </motion.div>
@@ -125,7 +162,7 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   Why did the competitor win?
                 </h3>
                 <p className="text-body-lg leading-relaxed" style={{ color: 'var(--on-surface-variant)' }}>
-                  {insight.whyCompetitorWon}
+                  {ins.whyCompetitorWon}
                 </p>
               </div>
 
@@ -136,7 +173,7 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   Evidence & Attribution Analysis
                 </h3>
                 <p className="text-body-md leading-relaxed" style={{ color: 'var(--secondary)' }}>
-                  {insight.evidenceText}
+                  {ins.evidenceText}
                 </p>
               </div>
 
@@ -147,7 +184,7 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
                   Core Hypothesis
                 </h3>
                 <p className="text-body-md leading-relaxed" style={{ color: 'var(--secondary)' }}>
-                  {insight.hypothesis}
+                  {ins.hypothesis}
                 </p>
               </div>
             </div>
@@ -163,17 +200,17 @@ export default function VisibilityGapPage({ params }: { params: { id: string } }
               className="h-full flex flex-col justify-between"
             >
               <p className="text-body-lg leading-relaxed mb-8" style={{ color: '#271900' }}>
-                {insight.recommendedAction}
+                {ins.recommendedAction}
               </p>
               <Link
-                href={`/insights/${insight.id}/brief`}
+                href={`/insights/${ins.id}/brief`}
                 className="w-full inline-flex justify-center items-center gap-2 px-6 py-4 rounded-full text-label-caps font-bold transition-opacity hover:opacity-90 shadow-sm"
                 style={{
                   backgroundColor: 'var(--primary-container)',
                   color: 'var(--on-primary)',
                 }}
               >
-                CREATE CONTENT BRIEF
+                VIEW CONTENT BRIEF
                 <ArrowRight size={16} />
               </Link>
             </StickyNote>

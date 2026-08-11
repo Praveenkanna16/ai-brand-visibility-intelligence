@@ -4,32 +4,35 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
-import { Target, Users, Cpu, MessageSquare, X, Plus, ArrowRight } from 'lucide-react';
+import { Target, Users, Cpu, MessageSquare, X, Plus, ArrowRight, Loader2, Zap } from 'lucide-react';
 import { buttonHover, buttonTap, fadeInUp } from '@/lib/animations/variants';
 
 const defaultEngines = [
+  { id: 'gemini', label: 'Gemini Advanced (Live)', checked: true },
   { id: 'chatgpt', label: 'ChatGPT (GPT-4)', checked: true },
-  { id: 'gemini', label: 'Gemini Advanced', checked: true },
   { id: 'perplexity', label: 'Perplexity Pro', checked: true },
-  { id: 'claude', label: 'Claude 3 Opus', checked: false },
+  { id: 'claude', label: 'Claude 3.5 Opus', checked: false },
 ];
 
 export default function NewRunPage() {
   const router = useRouter();
   const [brandName, setBrandName] = useState('Pixis');
   const [brandDomain, setBrandDomain] = useState('pixis.ai');
-  const [competitors, setCompetitors] = useState(['Albert.ai', 'Smartly.io']);
+  const [competitors, setCompetitors] = useState(['Smartly.io', 'Albert.ai', 'Madgicx', 'AdCreative.ai']);
   const [newCompetitor, setNewCompetitor] = useState('');
   const [engines, setEngines] = useState(defaultEngines);
   const [prompts, setPrompts] = useState([
-    'Best AI platform for ad performance optimization',
-    'Top tools for automating social media ad buying',
+    'What are the best AI platforms for optimizing advertising campaigns for ecommerce brands?',
+    'What are the best AI tools for improving ROAS?',
+    'Which AI platforms help brands automate paid advertising?',
   ]);
   const [newPrompt, setNewPrompt] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const toggleEngine = (id: string) => {
     setEngines((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, checked: !e.checked } : e)),
+      prev.map((e) => (e.id === id ? { ...e, checked: !e.checked } : e))
     );
   };
 
@@ -44,9 +47,61 @@ export default function NewRunPage() {
     setCompetitors(competitors.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = () => {
-    // In demo mode, navigate directly to the progress page
-    router.push('/runs/run-demo-001');
+  const removePrompt = (idx: number) => {
+    setPrompts(prompts.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmit = async () => {
+    setErrorMsg('');
+    const activePrompts = [...prompts];
+    if (newPrompt.trim()) {
+      activePrompts.push(newPrompt.trim());
+    }
+
+    if (!brandName.trim()) {
+      setErrorMsg('Target Brand name is required.');
+      return;
+    }
+
+    if (activePrompts.length === 0) {
+      setErrorMsg('At least one prompt is required.');
+      return;
+    }
+
+    const selectedEngines = engines.filter((e) => e.checked).map((e) => e.id);
+    if (selectedEngines.length === 0) {
+      setErrorMsg('At least one AI engine must be selected.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch('/api/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName: brandName.trim(),
+          brandDomain: brandDomain.trim(),
+          competitors,
+          engines: selectedEngines,
+          prompts: activePrompts,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create analysis run');
+      }
+
+      // Redirect directly to the analysis progress page
+      router.push(`/runs/${data.id}`);
+    } catch (err: any) {
+      console.error('Run creation error:', err);
+      setErrorMsg(err.message || 'Failed to start live analysis');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -54,6 +109,20 @@ export default function NewRunPage() {
       <div className="pt-6 pb-16 px-page max-w-4xl mx-auto w-full">
         {/* Header */}
         <header className="mb-12 mt-8">
+          <div className="flex items-center gap-3 mb-4">
+            <span
+              className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5"
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                color: '#059669',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+              }}
+            >
+              <Zap size={14} className="animate-pulse" />
+              LIVE ANALYSIS ENGINE
+            </span>
+          </div>
+
           <motion.h1
             variants={fadeInUp}
             initial="hidden"
@@ -61,7 +130,7 @@ export default function NewRunPage() {
             className="text-display-lg mb-4"
             style={{ color: 'var(--primary)' }}
           >
-            Run a visibility check
+            Run a Live Visibility Analysis
           </motion.h1>
           <motion.p
             variants={fadeInUp}
@@ -71,10 +140,15 @@ export default function NewRunPage() {
             className="text-body-lg max-w-2xl"
             style={{ color: 'var(--secondary)' }}
           >
-            Configure your analysis parameters below to measure how frequently your brand appears
-            alongside competitors across major AI language models.
+            Configure your target brand, competitors, and industry queries below. CiteScope will query live AI engines to measure your exact brand visibility.
           </motion.p>
         </header>
+
+        {errorMsg && (
+          <div className="mb-8 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium">
+            ⚠️ {errorMsg}
+          </div>
+        )}
 
         {/* Main Form Card */}
         <motion.div
@@ -100,14 +174,15 @@ export default function NewRunPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <label className="block text-label-caps mb-2" style={{ color: 'var(--secondary)' }}>
-                    Brand Name
+                    Brand Name *
                   </label>
                   <input
                     className="input-editorial w-full text-body-lg"
                     type="text"
-                    placeholder="e.g., Pixis"
+                    placeholder="e.g., Pixis or Nike"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
+                    required
                   />
                 </div>
                 <div>
@@ -129,7 +204,6 @@ export default function NewRunPage() {
 
             {/* Competitors */}
             <section className="relative">
-              {/* Analyst Note */}
               <div
                 className="absolute -right-4 -top-8 p-4 rounded-lg w-48 z-10 hidden md:block"
                 style={{
@@ -141,7 +215,7 @@ export default function NewRunPage() {
               >
                 <p className="text-label-caps mb-1">Analyst Note</p>
                 <p className="text-sm leading-tight">
-                  Adding at least 3 competitors yields the most robust baseline comparison metrics.
+                  Adding at least 2–4 competitors yields robust Share of Voice comparison metrics.
                 </p>
               </div>
 
@@ -176,7 +250,7 @@ export default function NewRunPage() {
                   <input
                     className="input-editorial flex-grow text-body-lg"
                     type="text"
-                    placeholder="Add competitor..."
+                    placeholder="Add another competitor..."
                     value={newCompetitor}
                     onChange={(e) => setNewCompetitor(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCompetitor())}
@@ -235,19 +309,19 @@ export default function NewRunPage() {
                 Category Prompts
               </h2>
               <p className="text-body-md mb-6" style={{ color: 'var(--secondary)' }}>
-                Enter the natural language queries users might ask when researching this category.
+                Enter the natural language questions users ask AI answer engines when researching your category.
               </p>
               <div className="space-y-6">
                 {prompts.map((p, i) => (
-                  <div key={i} className="relative">
+                  <div key={i} className="relative flex items-start gap-3">
                     <span
-                      className="absolute left-0 top-3 text-sm font-display"
+                      className="text-sm font-display pt-3"
                       style={{ color: 'var(--secondary)' }}
                     >
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <textarea
-                      className="input-editorial w-full pl-8 text-body-lg resize-none"
+                      className="input-editorial w-full text-body-lg resize-none"
                       rows={2}
                       value={p}
                       onChange={(e) => {
@@ -256,19 +330,29 @@ export default function NewRunPage() {
                         setPrompts(updated);
                       }}
                     />
+                    {prompts.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePrompt(i)}
+                        className="p-2 pt-3 rounded-full transition-colors hover:opacity-70"
+                        style={{ color: 'var(--outline)' }}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
                   </div>
                 ))}
-                <div className="relative">
+                <div className="relative flex items-start gap-3">
                   <span
-                    className="absolute left-0 top-3 text-sm font-display"
+                    className="text-sm font-display pt-3"
                     style={{ color: 'var(--outline)' }}
                   >
                     {String(prompts.length + 1).padStart(2, '0')}
                   </span>
                   <textarea
-                    className="input-editorial w-full pl-8 text-body-lg resize-none"
+                    className="input-editorial w-full text-body-lg resize-none"
                     rows={2}
-                    placeholder="Add another prompt..."
+                    placeholder="Add another natural query prompt..."
                     value={newPrompt}
                     onChange={(e) => setNewPrompt(e.target.value)}
                     onKeyDown={(e) => {
@@ -286,32 +370,40 @@ export default function NewRunPage() {
 
             {/* Actions */}
             <div
-              className="pt-8 flex justify-end gap-4 border-t mt-12"
+              className="pt-8 flex items-center justify-between border-t mt-12"
               style={{ borderColor: 'var(--outline-variant)' }}
             >
-              <button
-                type="button"
-                className="px-8 py-4 rounded-full border text-label-caps transition-colors hover:opacity-70"
-                style={{
-                  borderColor: 'var(--outline-variant)',
-                  color: 'var(--secondary)',
-                }}
-              >
-                Save as Draft
-              </button>
-              <motion.button
-                type="submit"
-                whileHover={buttonHover}
-                whileTap={buttonTap}
-                className="px-8 py-4 rounded-full text-label-caps flex items-center gap-2 shadow-sm transition-opacity hover:opacity-90"
-                style={{
-                  backgroundColor: 'var(--primary-container)',
-                  color: 'var(--on-primary)',
-                }}
-              >
-                Run analysis
-                <ArrowRight size={16} />
-              </motion.button>
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                Live Gemini Server-Side Execution Enabled
+              </div>
+
+              <div className="flex gap-4">
+                <motion.button
+                  type="submit"
+                  disabled={isSubmitting}
+                  whileHover={buttonHover}
+                  whileTap={buttonTap}
+                  className="px-8 py-4 rounded-full text-label-caps flex items-center gap-3 shadow-md transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{
+                    backgroundColor: 'var(--primary-container)',
+                    color: 'var(--on-primary)',
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Queuing Analysis...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={18} className="text-yellow-300 fill-yellow-300" />
+                      RUN LIVE ANALYSIS
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </motion.button>
+              </div>
             </div>
           </form>
         </motion.div>

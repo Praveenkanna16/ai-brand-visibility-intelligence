@@ -4,35 +4,45 @@ import { LLMProvider, LLMResponse } from './base';
 export class GeminiProvider implements LLMProvider {
   name = 'gemini';
   private genAI: GoogleGenerativeAI;
-  private modelName: string;
+  private primaryModel: string;
+  private fallbackModels: string[];
 
-  constructor(apiKey?: string, modelName = 'gemini-1.5-flash') {
+  constructor(apiKey?: string, modelName = 'gemini-flash-latest') {
     const key = apiKey || process.env.GEMINI_API_KEY || '';
     this.genAI = new GoogleGenerativeAI(key);
-    this.modelName = modelName;
+    this.primaryModel = modelName;
+    this.fallbackModels = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-2.0-flash'];
   }
 
   async generateResponse(prompt: string, options?: { systemPrompt?: string }): Promise<LLMResponse> {
-    try {
-      const model = this.genAI.getGenerativeModel({
-        model: this.modelName,
-        systemInstruction: options?.systemPrompt,
-      });
+    const modelsToTry = [this.primaryModel, ...this.fallbackModels.filter((m) => m !== this.primaryModel)];
+    let lastError: unknown = null;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+    for (const modelName of modelsToTry) {
+      try {
+        const model = this.genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: options?.systemPrompt,
+        });
 
-      return {
-        rawResponse: text,
-        engineId: 'engine-gemini',
-        provider: 'gemini',
-        model: this.modelName,
-      };
-    } catch (error) {
-      console.error('Gemini API Error:', error);
-      throw new Error(`Gemini Provider Error: ${error instanceof Error ? error.message : String(error)}`);
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        return {
+          rawResponse: text,
+          engineId: 'engine-gemini',
+          provider: 'gemini',
+          model: modelName,
+        };
+      } catch (error) {
+        console.warn(`Gemini API Warning with model ${modelName}:`, error instanceof Error ? error.message : error);
+        lastError = error;
+      }
     }
+
+    console.error('Gemini API Error across all models:', lastError);
+    throw new Error(`Gemini Provider Error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
   }
 
   async healthCheck(): Promise<boolean> {

@@ -27,6 +27,41 @@ export const BriefSchema = z.object({
 export type BriefResult = z.infer<typeof BriefSchema>;
 
 export class BriefGenerator {
+  static generateBriefFromInsight(insight: {
+    promptText?: string | null;
+    observation?: string | null;
+    whyCompetitorWon?: string | null;
+    recommendedAction?: string | null;
+    contentType?: string | null;
+    contentAngle?: string | null;
+    suggestedEvidence?: string | null;
+    confidence?: number | null;
+    limitations?: string | null;
+    competitorName?: string | null;
+  }): BriefResult {
+    return {
+      title: `Strategic Brief: Winning "${insight.promptText || 'Category Queries'}"`,
+      targetQuery: insight.promptText || 'Category Query',
+      visibilityGap: 'High',
+      competitorAdvantage: insight.whyCompetitorWon || 'Competitor currently holds primary AI citations.',
+      contentType: insight.contentType || 'Comparison Guide / Whitepaper',
+      strategicAngle: insight.contentAngle || 'Technical deep-dive and evidence-backed performance benchmarks.',
+      formatType: 'Long-form Technical Guide (2,500+ words)',
+      primaryAsset: 'Downloadable Benchmark Matrix & Case Study Template',
+      evidenceToInclude: insight.suggestedEvidence || 'Customer case studies, ROAS benchmarks, and implementation timeline data.',
+      recommendedStructure: [
+        { title: '1. Executive Summary & Market Problem', description: 'Address core enterprise challenges and why legacy solutions fall short.' },
+        { title: '2. Predictive Automation & Technical Deep-Dive', description: 'Detail technical architecture, predictive scaling, and automated optimization workflows.' },
+        { title: '3. Comparative Benchmark Analysis', description: 'Provide concrete ROI data and benchmark comparisons vs competing tools.' },
+        { title: '4. Enterprise Implementation Plan', description: 'Step-by-step deployment timeline, stage-gates, and measurable success metrics.' },
+      ],
+      reasoning: insight.observation || 'Enterprise buyers and LLMs prioritize authoritative, structured technical content.',
+      confidence: `${Math.round((insight.confidence || 0.88) * 100)}%`,
+      limitations: insight.limitations || 'LLM citations vary dynamically across model updates.',
+      analystNote: `High priority content brief to displace ${insight.competitorName || 'competitors'} in future AI runs.`,
+    };
+  }
+
   static async generate(
     recommendation: RecommendationResult,
     targetBrand: string,
@@ -35,26 +70,17 @@ export class BriefGenerator {
     const isDemoMode = process.env.DEMO_MODE === 'true';
 
     if (isDemoMode || (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY)) {
-      return {
-        title: `The Realistic Enterprise AI Implementation Timeline: From Pilot to Production`,
-        targetQuery: promptText,
-        visibilityGap: 'High',
-        competitorAdvantage: 'Competitors lack specific timeline phases. Highlighting realistic stage-gates is our unique angle.',
-        contentType: recommendation.contentType || 'Long-form Guide',
-        strategicAngle: recommendation.contentAngle || 'Shift the narrative from vague digital transformation to concrete phase-by-phase expectations.',
-        formatType: 'Long-form Guide (2,500+ words)',
-        primaryAsset: 'Downloadable Implementation Gantt Chart Template',
-        evidenceToInclude: recommendation.suggestedEvidence || 'Internal deployment data, customer time-to-value metrics, industry benchmarks',
-        recommendedStructure: [
-          { title: '1. The Pre-Flight Assessment (Month 0)', description: 'Data readiness audit, stakeholder alignment, and defining measurable KPIs.' },
-          { title: '2. Pilot Phase (Months 1-3)', description: 'Selecting low-risk high-reward use cases and establishing baseline metrics.' },
-          { title: '3. Enterprise Scaling (Months 4-6)', description: 'Expanding across business units and integrating automated feedback loops.' },
-        ],
-        reasoning: 'Enterprise buyers need concrete timelines. Most AI content is vague about implementation. This creates an opportunity to own the narrative.',
-        confidence: 'High (0.91)',
-        limitations: 'Implementation timelines vary by organization size and existing tech stack.',
-        analystNote: 'Competitors lack specific timeline phases. Highlighting realistic stage-gates is our unique angle.',
-      };
+      return this.generateBriefFromInsight({
+        promptText,
+        observation: recommendation.observation,
+        whyCompetitorWon: recommendation.whyCompetitorWon,
+        recommendedAction: recommendation.recommendedAction,
+        contentType: recommendation.contentType,
+        contentAngle: recommendation.contentAngle,
+        suggestedEvidence: recommendation.suggestedEvidence,
+        confidence: recommendation.confidence,
+        limitations: recommendation.limitations,
+      });
     }
 
     try {
@@ -93,25 +119,17 @@ Return ONLY a valid JSON object matching this schema:
       return BriefSchema.parse(parsed);
     } catch (err) {
       console.warn('BriefGenerator LLM failed, using fallback:', err);
-      return {
-        title: `Comprehensive Guide to ${promptText}`,
-        targetQuery: promptText,
-        visibilityGap: 'Medium',
-        competitorAdvantage: 'Competitors currently hold top citations for this query.',
-        contentType: 'Strategic Guide',
-        strategicAngle: recommendation.contentAngle || 'Direct comparison and evidence-backed case studies.',
-        formatType: 'Technical Guide',
-        primaryAsset: 'Comparison Matrix PDF',
-        evidenceToInclude: 'Performance metrics and ROI case studies.',
-        recommendedStructure: [
-          { title: 'Executive Summary', description: 'Overview of key capabilities.' },
-          { title: 'Technical Architecture', description: 'Deep dive into performance optimizations.' },
-        ],
-        reasoning: 'Fills clear content gap identified in AI search runs.',
-        confidence: 'Medium',
-        limitations: 'General recommendations.',
-        analystNote: 'High priority content brief.',
-      };
+      return this.generateBriefFromInsight({
+        promptText,
+        observation: recommendation.observation,
+        whyCompetitorWon: recommendation.whyCompetitorWon,
+        recommendedAction: recommendation.recommendedAction,
+        contentType: recommendation.contentType,
+        contentAngle: recommendation.contentAngle,
+        suggestedEvidence: recommendation.suggestedEvidence,
+        confidence: recommendation.confidence,
+        limitations: recommendation.limitations,
+      });
     }
   }
 }

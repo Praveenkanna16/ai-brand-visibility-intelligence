@@ -1,30 +1,77 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 import StickyNote from '@/components/ui/StickyNote';
 import { demoBrief } from '@/lib/demo/data';
-import { ArrowLeft, Sparkles, FileText, Check, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { fadeInUp, cardStagger, cardEntrance } from '@/lib/animations/variants';
+import { ArrowLeft, Sparkles, FileText, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
+import { cardStagger, cardEntrance } from '@/lib/animations/variants';
 
 export default function ContentBriefPage() {
-  const [brief, setBrief] = useState(demoBrief);
-  const [isDrafted, setIsDrafted] = useState(brief.status === 'drafted');
+  const params = useParams();
+  const id = (params?.id as string) || 'ins-001';
+
+  const [brief, setBrief] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDrafted, setIsDrafted] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+
+  useEffect(() => {
+    async function loadBrief() {
+      try {
+        const res = await fetch(`/api/insights/${id}/brief`);
+        if (res.ok) {
+          const data = await res.json();
+          setBrief(data);
+          setIsDrafted(data.status === 'drafted');
+        } else {
+          setBrief(demoBrief);
+        }
+      } catch (err) {
+        console.error('Error fetching brief:', err);
+        setBrief(demoBrief);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadBrief();
+  }, [id]);
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch(`/api/insights/${id}/brief`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setBrief(data);
+      }
+    } catch (err) {
+      console.error('Regeneration error:', err);
+    } finally {
       setIsRegenerating(false);
-    }, 1200);
+    }
   };
 
   const toggleDrafted = () => {
     setIsDrafted(!isDrafted);
-    setBrief({ ...brief, status: !isDrafted ? 'drafted' : 'generated' });
+    if (brief) {
+      setBrief({ ...brief, status: !isDrafted ? 'drafted' : 'generated' });
+    }
   };
+
+  const b = brief || demoBrief;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
+        <Loader2 size={36} className="animate-spin text-emerald-700 mb-4" />
+        <p className="text-body-md text-emerald-900 font-medium">Loading content strategy brief...</p>
+      </div>
+    );
+  }
 
   return (
     <PageTransition>
@@ -32,24 +79,24 @@ export default function ContentBriefPage() {
         {/* Top Actions & Breadcrumb */}
         <div className="flex justify-between items-center mb-6">
           <Link
-            href="/insights/insight-001"
+            href={`/insights/${id}`}
             className="inline-flex items-center gap-2 text-label-caps hover:opacity-70 transition-opacity"
             style={{ color: 'var(--secondary)' }}
           >
-            <ArrowLeft size={14} /> Back to Visibility Gap
+            <ArrowLeft size={14} /> Back to Visibility Insight
           </Link>
           <div className="flex items-center gap-3">
             <button
               onClick={handleRegenerate}
               disabled={isRegenerating}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-label-caps transition-colors hover:opacity-70"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-label-caps transition-colors hover:opacity-70 disabled:opacity-50"
               style={{
                 borderColor: 'var(--outline-variant)',
                 color: 'var(--secondary)',
               }}
             >
               <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
-              Regenerate Brief
+              {isRegenerating ? 'Regenerating...' : 'Regenerate Brief'}
             </button>
             <button
               onClick={toggleDrafted}
@@ -83,7 +130,7 @@ export default function ContentBriefPage() {
             AI Strategy Brief
           </span>
           <h1 className="text-display-lg mb-4" style={{ color: 'var(--primary)' }}>
-            {brief.title}
+            {b.title}
           </h1>
         </header>
 
@@ -103,7 +150,7 @@ export default function ContentBriefPage() {
                   Strategic Angle
                 </h3>
                 <p className="text-body-lg leading-relaxed" style={{ color: 'var(--on-surface-variant)' }}>
-                  {brief.strategicAngle}
+                  {b.strategicAngle}
                 </p>
               </div>
 
@@ -116,7 +163,7 @@ export default function ContentBriefPage() {
                     Format Type
                   </label>
                   <p className="text-body-md font-bold" style={{ color: 'var(--primary)' }}>
-                    {brief.formatType}
+                    {b.formatType}
                   </p>
                 </div>
                 <div>
@@ -124,7 +171,7 @@ export default function ContentBriefPage() {
                     Primary Asset
                   </label>
                   <p className="text-body-md font-bold" style={{ color: 'var(--primary)' }}>
-                    {brief.primaryAsset}
+                    {b.primaryAsset}
                   </p>
                 </div>
               </div>
@@ -138,7 +185,7 @@ export default function ContentBriefPage() {
                   Recommended Article Outline
                 </h3>
                 <div className="space-y-4">
-                  {brief.recommendedStructure?.map((sec, i) => (
+                  {(b.recommendedStructure || []).map((sec: any, i: number) => (
                     <div
                       key={i}
                       className="p-5 rounded-xl border"
@@ -166,7 +213,7 @@ export default function ContentBriefPage() {
                   Evidence to Include
                 </h3>
                 <p className="text-body-md leading-relaxed" style={{ color: 'var(--secondary)' }}>
-                  {brief.evidenceToInclude}
+                  {b.evidenceToInclude}
                 </p>
               </div>
             </div>
@@ -184,7 +231,7 @@ export default function ContentBriefPage() {
                   Target Query
                 </label>
                 <p className="text-body-md font-medium" style={{ color: 'var(--on-surface)' }}>
-                  "{brief.targetQuery}"
+                  "{b.targetQuery}"
                 </p>
               </div>
 
@@ -199,34 +246,9 @@ export default function ContentBriefPage() {
                     color: 'var(--on-error-container)',
                   }}
                 >
-                  {brief.visibilityGap} Risk Gap
+                  {b.visibilityGap || 'High'} Risk Gap
                 </span>
               </div>
-
-              {brief.winningCompetitors && (
-                <div>
-                  <label className="block text-label-caps mb-2" style={{ color: 'var(--secondary)' }}>
-                    Winning Competitors
-                  </label>
-                  <div className="space-y-2">
-                    {brief.winningCompetitors.map((comp) => (
-                      <div
-                        key={comp.name}
-                        className="flex justify-between items-center text-body-md p-2 rounded border"
-                        style={{
-                          backgroundColor: 'var(--surface-container-low)',
-                          borderColor: 'var(--outline-variant)',
-                        }}
-                      >
-                        <span>{comp.name}</span>
-                        <span className="font-bold text-xs" style={{ color: 'var(--primary-container)' }}>
-                          Rank #{comp.rank}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Analyst Note Sticky Note */}
@@ -237,7 +259,7 @@ export default function ContentBriefPage() {
               labelIcon={<Sparkles size={18} />}
             >
               <p className="text-body-md leading-relaxed" style={{ color: '#271900' }}>
-                {brief.analystNote || brief.competitorAdvantage}
+                {b.analystNote || b.competitorAdvantage || b.reasoning}
               </p>
             </StickyNote>
           </motion.div>
