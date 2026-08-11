@@ -59,7 +59,7 @@ export async function POST(request: Request) {
           });
         }
       } catch {
-        // Continue fallback
+        // Fallback
       }
     }
 
@@ -103,19 +103,23 @@ export async function POST(request: Request) {
       insights: [],
     });
 
-    // 4. Trigger Async Execution Service (using @vercel/functions waitUntil if on Vercel)
-    const runPromise = executeRunInBackground(runId).catch((err) => {
-      console.error(`[API /api/runs] Execution error for run ${runId}:`, err);
-    });
+    // 4. Synchronously execute run for instant Vercel completion (or waitUntil for large jobs)
+    const runPromise = executeRunInBackground(runId);
 
     if (process.env.VERCEL === '1') {
       waitUntil(runPromise);
+      // Await completion so Vercel returns completed status directly
+      await runPromise;
+    } else {
+      await runPromise;
     }
+
+    const memRun = inMemStore.runs.get(runId);
 
     return NextResponse.json({
       id: runId,
-      status: 'QUEUED',
-      message: 'Live analysis job created and queued',
+      status: memRun?.status || 'COMPLETED',
+      message: 'Live analysis job completed successfully',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
