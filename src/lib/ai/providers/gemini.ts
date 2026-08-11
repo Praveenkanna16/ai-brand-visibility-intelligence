@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LLMProvider, LLMResponse } from './base';
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const MAX_RETRIES = 2;
 const INITIAL_BACKOFF_MS = 1000;
 const TIMEOUT_MS = 30000;
