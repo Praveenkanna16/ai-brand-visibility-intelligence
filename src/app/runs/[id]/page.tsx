@@ -69,10 +69,25 @@ export default function RunProgressPage() {
 
     async function fetchReport() {
       try {
+        const cached = typeof window !== 'undefined' ? localStorage.getItem(`citescope_run_${id}`) : null;
+        if (cached) {
+          try {
+            setReport(JSON.parse(cached));
+          } catch {
+            // ignore JSON parse error
+          }
+        }
         const res = await fetch(`/api/runs/${id}`);
         if (res.ok) {
           const data = await res.json();
-          setReport(data);
+          if (data && !data.error) {
+            setReport(data);
+            try {
+              localStorage.setItem(`citescope_run_${id}`, JSON.stringify(data));
+            } catch {
+              // ignore
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching full report:', err);

@@ -75,6 +75,14 @@ export default function NewRunPage() {
         throw new Error(data.error || 'Unable to start the analysis. Please try again.');
       }
 
+      if (data.report) {
+        try {
+          localStorage.setItem(`citescope_run_${data.id}`, JSON.stringify(data.report));
+        } catch {
+          // ignore quota
+        }
+      }
+
       router.push(`/runs/${data.id}`);
     } catch (err: any) {
       console.error('Run creation error:', err);

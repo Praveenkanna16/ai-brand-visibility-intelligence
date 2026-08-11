@@ -103,12 +103,11 @@ export async function POST(request: Request) {
       insights: [],
     });
 
-    // 4. Synchronously execute run for instant Vercel completion (or waitUntil for large jobs)
+    // 4. Synchronously execute run for instant Vercel completion
     const runPromise = executeRunInBackground(runId);
 
     if (process.env.VERCEL === '1') {
       waitUntil(runPromise);
-      // Await completion so Vercel returns completed status directly
       await runPromise;
     } else {
       await runPromise;
@@ -116,10 +115,27 @@ export async function POST(request: Request) {
 
     const memRun = inMemStore.runs.get(runId);
 
+    const report = {
+      id: runId,
+      brandName: brand.name,
+      brandDomain: brand.domain || '',
+      status: memRun?.status || 'COMPLETED',
+      startedAt: memRun?.startedAt || new Date(),
+      completedAt: memRun?.completedAt || new Date(),
+      error: memRun?.error || null,
+      competitorNames: validated.competitors,
+      enginesUsed: validated.engines,
+      promptIds: validated.prompts,
+      metrics: memRun?.metrics || null,
+      results: memRun?.results || [],
+      insights: memRun?.insights || [],
+    };
+
     return NextResponse.json({
       id: runId,
       status: memRun?.status || 'COMPLETED',
       message: 'Live analysis job completed successfully',
+      report,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
