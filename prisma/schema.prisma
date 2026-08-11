@@ -1,0 +1,206 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Brand ──────────────────────────────────────────────────
+model Brand {
+  id          String   @id @default(uuid())
+  name        String
+  domain      String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  competitors       Competitor[]
+  prompts           Prompt[]
+  runs              Run[]
+  visibilityMetrics VisibilityMetric[]
+  insights          Insight[]
+}
+
+// ─── Competitor ─────────────────────────────────────────────
+model Competitor {
+  id        String   @id @default(uuid())
+  name      String
+  domain    String?
+  brandId   String
+  createdAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+// ─── AI Engine ──────────────────────────────────────────────
+model AIEngine {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  provider    String   // gemini, openai, anthropic, perplexity
+  modelId     String
+  displayName String
+  enabled     Boolean  @default(true)
+  color       String?  // Hex color for UI badges
+  createdAt   DateTime @default(now())
+
+  runResults RunResult[]
+}
+
+// ─── Prompt ─────────────────────────────────────────────────
+model Prompt {
+  id        String   @id @default(uuid())
+  text      String
+  category  String?
+  brandId   String
+  createdAt DateTime @default(now())
+
+  brand      Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  runResults RunResult[]
+  insights   Insight[]
+
+  @@index([brandId])
+}
+
+// ─── Run ────────────────────────────────────────────────────
+model Run {
+  id                String    @id @default(uuid())
+  brandId           String
+  status            String    @default("QUEUED")
+  progressCurrent   Int       @default(0)
+  progressTotal     Int       @default(0)
+  currentStep       String?
+  currentStepDetail String?
+  enginesUsed       String?   // JSON string
+  competitorNames   String?   // JSON string
+  promptIds         String?   // JSON string
+  startedAt         DateTime?
+  completedAt       DateTime?
+  error             String?
+  createdAt         DateTime  @default(now())
+
+  brand             Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  results           RunResult[]
+  insights          Insight[]
+  visibilityMetrics VisibilityMetric[]
+
+  @@index([brandId])
+  @@index([status])
+}
+
+// ─── RunResult ──────────────────────────────────────────────
+model RunResult {
+  id                   String   @id @default(uuid())
+  runId                String
+  promptId             String
+  engineId             String
+  rawResponse          String?
+  mentioned            Boolean?
+  mentionType          String?  // direct, indirect, not_mentioned
+  position             Int?
+  competitorsMentioned String?  // JSON string
+  sentiment            String?  // positive, neutral, negative
+  relevantClaims       String?  // JSON string
+  evidence             String?  // JSON string
+  confidence           Float?
+  status               String?  // gap_detected, favorable, high_priority_gap, needs_optimization
+  statusLabel          String?
+  createdAt            DateTime @default(now())
+
+  run    Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  prompt Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  engine AIEngine @relation(fields: [engineId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([promptId])
+  @@index([engineId])
+}
+
+// ─── VisibilityMetric ───────────────────────────────────────
+model VisibilityMetric {
+  id               String   @id @default(uuid())
+  brandId          String
+  runId            String?
+  visibilityScore  Float    @default(0)
+  mentionRate      Float    @default(0)
+  avgPosition      Float?
+  shareOfMentions  Float    @default(0)
+  engineBreakdown  String?  // JSON string
+  competitorShares String?  // JSON string
+  trendChange      Float?
+  period           String?  // 7D, 30D, 90D
+  createdAt        DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  run   Run?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([brandId])
+  @@index([runId])
+}
+
+// ─── Insight ────────────────────────────────────────────────
+model Insight {
+  id                  String   @id @default(uuid())
+  runId               String
+  promptId            String?
+  brandId             String
+  competitorName      String
+  promptText          String?
+  brandMentioned      Boolean  @default(false)
+  brandStatus         String?  // NOT MENTIONED, MENTIONED
+  competitorMentioned Boolean  @default(true)
+  competitorPosition  Int?
+  competitorCiteRate  Float?
+  observation         String?
+  whyCompetitorWon    String?
+  evidenceText        String?
+  hypothesis          String?
+  recommendedAction   String?
+  contentType         String?
+  contentAngle        String?
+  suggestedEvidence   String?
+  confidence          Float?
+  limitations         String?
+  createdAt           DateTime @default(now())
+
+  run    Run     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  prompt Prompt? @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  brand  Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brief  Brief?
+
+  @@index([runId])
+  @@index([brandId])
+  @@index([promptId])
+}
+
+// ─── Brief ──────────────────────────────────────────────────
+model Brief {
+  id                   String   @id @default(uuid())
+  insightId            String   @unique
+  title                String
+  targetQuery          String?
+  visibilityGap        String?
+  competitorAdvantage  String?
+  contentType          String?
+  strategicAngle       String?
+  formatType           String?
+  primaryAsset         String?
+  evidenceToInclude    String?
+  recommendedStructure String?  // JSON string
+  reasoning            String?
+  confidence           String?
+  limitations          String?
+  analystNote          String?
+  status               String   @default("generated") // generated, drafted
+  winningCompetitors   String?  // JSON string
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  insight Insight @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@index([insightId])
+}
